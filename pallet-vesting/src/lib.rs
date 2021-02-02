@@ -61,15 +61,54 @@ use frame_support::traits::{
 	Currency, LockableCurrency, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get,
 };
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{
+	ensure_signed, ensure_root,
+	offchain::{
+		AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer,
+	},
+};
 use fixed::{types::U16F16};
 pub use weights::WeightInfo;
 use pallet_tft_price_oracle;
+use sp_runtime::traits::SaturatedConversion;
+
+use sp_core::crypto::KeyTypeId;
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"tft!");
+
+pub mod crypto {
+    use crate::KEY_TYPE;
+    use sp_core::sr25519::Signature as Sr25519Signature;
+    use sp_runtime::{
+        app_crypto::{app_crypto, sr25519},
+        traits::Verify,
+        MultiSignature, MultiSigner,
+    };
+
+    app_crypto!(sr25519, KEY_TYPE);
+
+    pub struct AuthId;
+
+    // implemented for ocw-runtime
+    impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for AuthId {
+        type RuntimeAppPublic = Public;
+        type GenericSignature = sp_core::sr25519::Signature;
+        type GenericPublic = sp_core::sr25519::Public;
+    }
+
+    // implemented for mock runtime in test
+    impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+    for AuthId
+    {
+        type RuntimeAppPublic = Public;
+        type GenericSignature = sp_core::sr25519::Signature;
+        type GenericPublic = sp_core::sr25519::Public;
+    }
+}
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type MaxLocksOf<T> = <<T as Config>::Currency as LockableCurrency<<T as frame_system::Trait>::AccountId>>::MaxLocks;
 
-pub trait Config: frame_system::Trait {
+pub trait Config: frame_system::Trait + CreateSignedTransaction<Call<Self>> {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
@@ -84,6 +123,10 @@ pub trait Config: frame_system::Trait {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	// Add other types and constants required to configure this pallet.
+    type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+    type Call: From<Call<Self>>;
 }
 
 /// A vesting schedule over a currency. This allows a particular currency to have vesting limits
@@ -122,6 +165,7 @@ pub trait VestingSchedule<AccountId> {
 }
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
+const AVG_MONTHLY_BLOCKS: u64 = 438291;
 
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -217,6 +261,7 @@ decl_error! {
 		ExistingVestingSchedule,
 		/// Amount being transferred is too low to create a vesting schedule.
 		AmountLow,
+		OffchainSignedTxError,
 	}
 }
 
@@ -349,8 +394,35 @@ decl_module! {
 			Ok(())
 		}
 
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
+		pub fn force_stop_vesting(
+			origin,
+			target: T::AccountId,
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			debug::info!("unlocking vesting schedule for {:?}", &target);
+			T::Currency::remove_lock(VESTING_ID, &target);
+			Vesting::<T>::remove(&target);
+			
+			debug::info!("removing schedule for {:?}", &target);
+			let mut vesters = AccountsVesting::<T>::get();
+
+			match vesters.binary_search(&target) {
+				Ok(index) => {
+					vesters.remove(index);
+					AccountsVesting::<T>::put(vesters);
+				},
+				Err(_) => ()
+			}
+
+			Self::deposit_event(RawEvent::VestingCompleted(target.clone()));
+
+			Ok(())
+		}
+
 		fn offchain_worker(block_number: T::BlockNumber) {
-			match Self::check_vesting_unlocks() {
+			match Self::check_vesting_unlocks(block_number) {
 				Ok(_) => debug::info!("worker executed"),
 				Err(err) => debug::info!("err: {:?}", err)
 			}
@@ -378,27 +450,84 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	fn check_vesting_unlocks() -> DispatchResult {
+	fn check_vesting_unlocks(current_block: T::BlockNumber) -> DispatchResult {
+		let current_block_u64: u64 = current_block.saturated_into::<u64>();
+
 		let tft_price = pallet_tft_price_oracle::TftPrice::get();
 		debug::info!("checking if accounts need to be unlocked, tft price: {:?}", tft_price);
 
 		let vesters = AccountsVesting::<T>::get();
 
 		for vesting_account in vesters {
-			debug::info!("fetching vesting schedule for account: {:?}", vesting_account);
+			let _ = Self::vesting(&vesting_account).ok_or(Error::<T>::NotVesting)?;
+			
+			debug::info!("checking schedule for account {:?}", &vesting_account);
 			let schedule = Vesting::<T>::get(&vesting_account);
 
 			match schedule {
 				Some(stored_schedule) => {
-					debug::info!("configured tft price in schedule: {:?}", stored_schedule.tft_price);
-					debug::info!("schedule: {:?}", stored_schedule);
+					// If the TFT Price in storage exceeds the price set on the vesting schedule we unlock all vested tokens!
 					if tft_price > stored_schedule.tft_price {
-						debug::info!("check to unlock schedule");
+						let signer = Signer::<T, T::AuthorityId>::any_account();
+
+						let result = signer.send_signed_transaction(|_acct| {
+							Call::force_stop_vesting(vesting_account.clone())
+						});
+
+						// Display error if the signed tx fails.
+						// Display error if the signed tx fails.
+						if let Some((acc, res)) = result {
+							if res.is_err() {
+								debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
+								// return Err(<Error<T>>::OffchainSignedTxError);
+							}
+							// Transaction is sent successfully
+							return Ok(());
+						}
+						// The case of `None`: no account is available for sending
+						debug::error!("No local account available");
+						break
 					}
+
+					debug::info!("calculating check for {:?}", &vesting_account);
+
+					// TODO CALL EXTRINSIC
+
+					let starting_block_u64 = stored_schedule.starting_block.saturated_into::<u64>();
+					// calculate the difference in blocks between the starting block and now
+					let diff = current_block_u64 - starting_block_u64;
+					let current_month = diff / AVG_MONTHLY_BLOCKS;
+					
+					let limit = (current_month as f64 * 0.5) + 0.2;
+					// if value of TFT > month*0.5%+0.2 then month unlocks
+					if tft_price > limit {
+						debug::info!("TFT price is higher than current month limit: {:?}", limit);
+						// first calculate the block number of the next month
+						let mut index = 1;
+						let mut month_block = starting_block_u64 + AVG_MONTHLY_BLOCKS;
+						while index != current_month +1 {
+							month_block += AVG_MONTHLY_BLOCKS;
+							index += 1; 
+						}
+						let next_month_block = T::BlockNumber::from(month_block as u32);
+
+						let vesting = Self::vesting(&vesting_account).ok_or(Error::<T>::NotVesting)?;
+						// let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(current_block);
+						let locked_then = vesting.locked_at::<T::BlockNumberToBalance>(next_month_block);
+						debug::info!("tokens locked at block {:?}: {:?}", next_month_block, locked_then);
+						// subtract the amount of locked tokens at next month block with the current tokens locked now
+						// let locked_to_subtract = locked_then - locked_now;
+
+						// update the lock
+						let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+						debug::info!("updating vesting lock for {:?}", &vesting_account);
+						T::Currency::set_lock(VESTING_ID, &vesting_account, locked_then, reasons);
+						Self::deposit_event(RawEvent::VestingUpdated(vesting_account.clone(), locked_then));
+					}
+					
 				},
 				None => ()
 			}
-
 		}
 
 		Ok(())
