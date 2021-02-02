@@ -405,9 +405,7 @@ decl_module! {
 			T::Currency::remove_lock(VESTING_ID, &target);
 			Vesting::<T>::remove(&target);
 			
-			debug::info!("removing schedule for {:?}", &target);
 			let mut vesters = AccountsVesting::<T>::get();
-
 			match vesters.binary_search(&target) {
 				Ok(index) => {
 					vesters.remove(index);
@@ -417,6 +415,28 @@ decl_module! {
 			}
 
 			Self::deposit_event(RawEvent::VestingCompleted(target.clone()));
+
+			Ok(())
+		}
+
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
+		pub fn force_recalculate_vesting(
+			origin,
+			target: T::AccountId,
+			block_number: T::BlockNumber
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			let vesting = Self::vesting(&target).ok_or(Error::<T>::NotVesting)?;
+
+			let locked_then = vesting.locked_at::<T::BlockNumberToBalance>(block_number);
+			debug::info!("tokens locked at block {:?}: {:?}", block_number, locked_then);
+
+			// update the lock
+			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+			debug::info!("updating vesting lock for {:?}", &target);
+			T::Currency::set_lock(VESTING_ID, &target, locked_then, reasons);
+			Self::deposit_event(RawEvent::VestingUpdated(target.clone(), locked_then));
 
 			Ok(())
 		}
@@ -441,6 +461,16 @@ impl<T: Config> Module<T> {
 		if locked_now.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
 			Vesting::<T>::remove(&who);
+
+			let mut vesters = AccountsVesting::<T>::get();
+			match vesters.binary_search(&who) {
+				Ok(index) => {
+					vesters.remove(index);
+					AccountsVesting::<T>::put(vesters);
+				},
+				Err(_) => ()
+			}
+
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
@@ -453,7 +483,9 @@ impl<T: Config> Module<T> {
 	fn check_vesting_unlocks(current_block: T::BlockNumber) -> DispatchResult {
 		let current_block_u64: u64 = current_block.saturated_into::<u64>();
 
-		let tft_price = pallet_tft_price_oracle::TftPrice::get();
+		// let tft_price = pallet_tft_price_oracle::TftPrice::get();
+		let tft_price = 0.21;
+
 		debug::info!("checking if accounts need to be unlocked, tft price: {:?}", tft_price);
 
 		let vesters = AccountsVesting::<T>::get();
@@ -475,11 +507,9 @@ impl<T: Config> Module<T> {
 						});
 
 						// Display error if the signed tx fails.
-						// Display error if the signed tx fails.
 						if let Some((acc, res)) = result {
 							if res.is_err() {
 								debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
-								// return Err(<Error<T>>::OffchainSignedTxError);
 							}
 							// Transaction is sent successfully
 							return Ok(());
@@ -490,15 +520,21 @@ impl<T: Config> Module<T> {
 					}
 
 					debug::info!("calculating check for {:?}", &vesting_account);
-
-					// TODO CALL EXTRINSIC
-
 					let starting_block_u64 = stored_schedule.starting_block.saturated_into::<u64>();
+
+					// Vesting period did not start yet, nothing to do here
+					if current_block_u64 < starting_block_u64 {
+						break
+					}
+
+					debug::info!("schedule per block {:?}", &stored_schedule.per_block);
+
 					// calculate the difference in blocks between the starting block and now
 					let diff = current_block_u64 - starting_block_u64;
 					let current_month = diff / AVG_MONTHLY_BLOCKS;
 					
 					let limit = (current_month as f64 * 0.5) + 0.2;
+					debug::info!("limit price for month {:?}: {:?}", current_month, limit);
 					// if value of TFT > month*0.5%+0.2 then month unlocks
 					if tft_price > limit {
 						debug::info!("TFT price is higher than current month limit: {:?}", limit);
@@ -511,18 +547,22 @@ impl<T: Config> Module<T> {
 						}
 						let next_month_block = T::BlockNumber::from(month_block as u32);
 
-						let vesting = Self::vesting(&vesting_account).ok_or(Error::<T>::NotVesting)?;
-						// let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(current_block);
-						let locked_then = vesting.locked_at::<T::BlockNumberToBalance>(next_month_block);
-						debug::info!("tokens locked at block {:?}: {:?}", next_month_block, locked_then);
-						// subtract the amount of locked tokens at next month block with the current tokens locked now
-						// let locked_to_subtract = locked_then - locked_now;
+						let signer = Signer::<T, T::AuthorityId>::any_account();
 
-						// update the lock
-						let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-						debug::info!("updating vesting lock for {:?}", &vesting_account);
-						T::Currency::set_lock(VESTING_ID, &vesting_account, locked_then, reasons);
-						Self::deposit_event(RawEvent::VestingUpdated(vesting_account.clone(), locked_then));
+						let result = signer.send_signed_transaction(|_acct| {
+							Call::force_recalculate_vesting(vesting_account.clone(), next_month_block)
+						});
+
+						// Display error if the signed tx fails.
+						if let Some((acc, res)) = result {
+							if res.is_err() {
+								debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
+							}
+							// Transaction is sent successfully
+							return Ok(());
+						}
+						// The case of `None`: no account is available for sending
+						debug::error!("No local account available");
 					}
 					
 				},
