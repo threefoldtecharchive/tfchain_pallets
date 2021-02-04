@@ -178,6 +178,8 @@ pub struct VestingInfo<Balance, BlockNumber> {
 	pub starting_block: BlockNumber,
 	/// TFT price limit to unlock vesting
 	pub tft_price: U16F16,
+	/// Block where the last release happened
+	pub last_released_block: BlockNumber,
 }
 
 impl<
@@ -233,6 +235,7 @@ decl_storage! {
 					per_block: per_block,
 					starting_block: begin,
 					tft_price: U16F16::from_num(0.20),
+					last_released_block: T::BlockNumber::from(0),
 				});
 				let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
@@ -429,13 +432,20 @@ decl_module! {
 
 			let vesting = Self::vesting(&target).ok_or(Error::<T>::NotVesting)?;
 
+			// calculate locked tokens at block_number
 			let locked_then = vesting.locked_at::<T::BlockNumberToBalance>(block_number);
 			debug::info!("tokens locked at block {:?}: {:?}", block_number, locked_then);
 
-			// update the lock
+			// update the lock with tokens locked at block_number x
 			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
 			debug::info!("updating vesting lock for {:?}", &target);
 			T::Currency::set_lock(VESTING_ID, &target, locked_then, reasons);
+			
+			// update the schedule with the last released block
+			let mut schedule = Vesting::<T>::get(target.clone()).ok_or(Error::<T>::NotVesting)?;
+			schedule.last_released_block = block_number;
+			Vesting::<T>::insert(target.clone(), schedule);
+
 			Self::deposit_event(RawEvent::VestingUpdated(target.clone(), locked_then));
 
 			Ok(())
@@ -484,7 +494,7 @@ impl<T: Config> Module<T> {
 		let current_block_u64: u64 = current_block.saturated_into::<u64>();
 
 		// let tft_price = pallet_tft_price_oracle::TftPrice::get();
-		let tft_price = 0.21;
+		let tft_price = 0.31;
 
 		debug::info!("checking if accounts need to be unlocked, tft price: {:?}", tft_price);
 
@@ -512,6 +522,7 @@ impl<T: Config> Module<T> {
 								debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
 							}
 							// Transaction is sent successfully
+							debug::info!("releasing schedule for {:?}", &vesting_account);
 							return Ok(());
 						}
 						// The case of `None`: no account is available for sending
@@ -521,9 +532,18 @@ impl<T: Config> Module<T> {
 
 					debug::info!("calculating check for {:?}", &vesting_account);
 					let starting_block_u64 = stored_schedule.starting_block.saturated_into::<u64>();
+					let last_release_block_u64 = stored_schedule.last_released_block.saturated_into::<u64>();
 
 					// Vesting period did not start yet, nothing to do here
 					if current_block_u64 < starting_block_u64 {
+						break
+					}
+
+					// If the current blockheight is lower than the last released block on the schedule
+					// we don't do anything here because the schedule for this month is most likely already released
+					// if the current month is not released yet the last_release_block value will be 0 and this condition
+					// will be skipped
+					if current_block_u64 < last_release_block_u64 {
 						break
 					}
 
@@ -616,7 +636,8 @@ impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 			locked,
 			per_block,
 			starting_block,
-			tft_price
+			tft_price,
+			last_released_block: T::BlockNumber::from(0 as u32)
 		};
 		Vesting::<T>::insert(who, vesting_schedule);
 
