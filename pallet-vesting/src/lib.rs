@@ -212,6 +212,7 @@ decl_storage! {
 			=> Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
 
 		pub AccountsVesting get(fn accounts_vesting): Vec<T::AccountId>;
+		pub LastCheck get(fn last_check): T::BlockNumber;
 	}
 	add_extra_genesis {
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>;
@@ -493,9 +494,7 @@ impl<T: Config> Module<T> {
 	fn check_vesting_unlocks(current_block: T::BlockNumber) -> DispatchResult {
 		let current_block_u64: u64 = current_block.saturated_into::<u64>();
 
-		// let tft_price = pallet_tft_price_oracle::TftPrice::get();
-		let tft_price = 0.31;
-
+		let tft_price = pallet_tft_price_oracle::TftPrice::get();
 		debug::info!("checking if accounts need to be unlocked, tft price: {:?}", tft_price);
 
 		let vesters = AccountsVesting::<T>::get();
@@ -504,89 +503,84 @@ impl<T: Config> Module<T> {
 			let _ = Self::vesting(&vesting_account).ok_or(Error::<T>::NotVesting)?;
 			
 			debug::info!("checking schedule for account {:?}", &vesting_account);
-			let schedule = Vesting::<T>::get(&vesting_account);
+			let stored_schedule = Vesting::<T>::get(&vesting_account).ok_or(Error::<T>::NotVesting)?;
 
-			match schedule {
-				Some(stored_schedule) => {
-					// If the TFT Price in storage exceeds the price set on the vesting schedule we unlock all vested tokens!
-					if tft_price > stored_schedule.tft_price {
-						let signer = Signer::<T, T::AuthorityId>::any_account();
 
-						let result = signer.send_signed_transaction(|_acct| {
-							Call::force_stop_vesting(vesting_account.clone())
-						});
+			// If the TFT Price in storage exceeds the price set on the vesting schedule we unlock all vested tokens!
+			if tft_price > stored_schedule.tft_price {
+				let signer = Signer::<T, T::AuthorityId>::any_account();
 
-						// Display error if the signed tx fails.
-						if let Some((acc, res)) = result {
-							if res.is_err() {
-								debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
-							}
-							// Transaction is sent successfully
-							debug::info!("releasing schedule for {:?}", &vesting_account);
-							return Ok(());
-						}
-						// The case of `None`: no account is available for sending
-						debug::error!("No local account available");
-						break
+				let result = signer.send_signed_transaction(|_acct| {
+					Call::force_stop_vesting(vesting_account.clone())
+				});
+
+				// Display error if the signed tx fails.
+				if let Some((acc, res)) = result {
+					if res.is_err() {
+						debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
 					}
+					// Transaction is sent successfully
+					debug::info!("releasing schedule for {:?}", &vesting_account);
+					return Ok(());
+				}
+				// The case of `None`: no account is available for sending
+				debug::error!("No local account available");
+				break
+			}
 
-					debug::info!("calculating check for {:?}", &vesting_account);
-					let starting_block_u64 = stored_schedule.starting_block.saturated_into::<u64>();
-					let last_release_block_u64 = stored_schedule.last_released_block.saturated_into::<u64>();
+			debug::info!("calculating check for {:?}", &vesting_account);
+			let starting_block_u64 = stored_schedule.starting_block.saturated_into::<u64>();
+			let last_release_block_u64 = stored_schedule.last_released_block.saturated_into::<u64>();
 
-					// Vesting period did not start yet, nothing to do here
-					if current_block_u64 < starting_block_u64 {
-						break
+			// Vesting period did not start yet, nothing to do here
+			if current_block_u64 < starting_block_u64 {
+				break
+			}
+
+			// If the current blockheight is lower than the last released block on the schedule
+			// we don't do anything here because the schedule for this month is most likely already released
+			// if the current month is not released yet the last_release_block value will be 0 and this condition
+			// will be skipped
+			if current_block_u64 < last_release_block_u64 {
+				break
+			}
+
+			debug::info!("schedule per block {:?}", &stored_schedule.per_block);
+
+			// calculate the difference in blocks between the starting block and now
+			let diff = current_block_u64 - starting_block_u64;
+			let current_month = diff / AVG_MONTHLY_BLOCKS;
+			
+			let limit = (current_month as f64 * 0.5) + 0.2;
+			debug::info!("limit price for month {:?}: {:?}", current_month, limit);
+			// if value of TFT > month*0.5%+0.2 then month unlocks
+			if tft_price > limit {
+				debug::info!("TFT price is higher than current month limit: {:?}", limit);
+				// first calculate the block number of the next month
+				let mut index = 1;
+				let mut month_block = starting_block_u64 + AVG_MONTHLY_BLOCKS;
+				while index != current_month +1 {
+					month_block += AVG_MONTHLY_BLOCKS;
+					index += 1; 
+				}
+				let next_month_block = T::BlockNumber::from(month_block as u32);
+
+				let signer = Signer::<T, T::AuthorityId>::any_account();
+
+				let result = signer.send_signed_transaction(|_acct| {
+					Call::force_recalculate_vesting(vesting_account.clone(), next_month_block)
+				});
+
+				// Display error if the signed tx fails.
+				if let Some((acc, res)) = result {
+					if res.is_err() {
+						debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
 					}
-
-					// If the current blockheight is lower than the last released block on the schedule
-					// we don't do anything here because the schedule for this month is most likely already released
-					// if the current month is not released yet the last_release_block value will be 0 and this condition
-					// will be skipped
-					if current_block_u64 < last_release_block_u64 {
-						break
-					}
-
-					debug::info!("schedule per block {:?}", &stored_schedule.per_block);
-
-					// calculate the difference in blocks between the starting block and now
-					let diff = current_block_u64 - starting_block_u64;
-					let current_month = diff / AVG_MONTHLY_BLOCKS;
-					
-					let limit = (current_month as f64 * 0.5) + 0.2;
-					debug::info!("limit price for month {:?}: {:?}", current_month, limit);
-					// if value of TFT > month*0.5%+0.2 then month unlocks
-					if tft_price > limit {
-						debug::info!("TFT price is higher than current month limit: {:?}", limit);
-						// first calculate the block number of the next month
-						let mut index = 1;
-						let mut month_block = starting_block_u64 + AVG_MONTHLY_BLOCKS;
-						while index != current_month +1 {
-							month_block += AVG_MONTHLY_BLOCKS;
-							index += 1; 
-						}
-						let next_month_block = T::BlockNumber::from(month_block as u32);
-
-						let signer = Signer::<T, T::AuthorityId>::any_account();
-
-						let result = signer.send_signed_transaction(|_acct| {
-							Call::force_recalculate_vesting(vesting_account.clone(), next_month_block)
-						});
-
-						// Display error if the signed tx fails.
-						if let Some((acc, res)) = result {
-							if res.is_err() {
-								debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
-							}
-							// Transaction is sent successfully
-							return Ok(());
-						}
-						// The case of `None`: no account is available for sending
-						debug::error!("No local account available");
-					}
-					
-				},
-				None => ()
+					// Transaction is sent successfully
+					return Ok(());
+				}
+				// The case of `None`: no account is available for sending
+				debug::error!("No local account available");
 			}
 		}
 
