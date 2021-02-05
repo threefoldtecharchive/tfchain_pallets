@@ -6,10 +6,11 @@
 //! it only checks for signed extrinsics to enable arbitrary minting/slashing!!!
 
 use frame_support::{
-	decl_event, decl_module,
+	decl_event, decl_module, decl_storage, decl_error,
 	traits::{Currency, OnUnbalanced, ReservableCurrency},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
+use sp_runtime::{DispatchResult};
 
 // balance type using reservable currency type
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -38,6 +39,20 @@ decl_event!(
 	}
 );
 
+decl_error! {
+	/// Error for the vesting module.
+	pub enum Error for Module<T: Trait> {
+		ValidatorExists,
+		ValidatorNotExists,
+	}
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as TFTBridgeModule {
+		pub Validators get(fn validator_accounts): Vec<T::AccountId>;
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
@@ -52,6 +67,18 @@ decl_module! {
 		fn swap_to_stellar(origin, target: T::AccountId, amount: BalanceOf<T>){
             let _ = ensure_signed(origin)?;
             Self::burn_tft(target, amount);
+		}
+		
+		#[weight = 10_000]
+		fn add_validator(origin, target: T::AccountId){
+            ensure_root(origin)?;
+            Self::add_validator_account(target)?;
+		}
+		
+		#[weight = 10_000]
+		fn remove_validator(origin, target: T::AccountId){
+            ensure_root(origin)?;
+            Self::remove_validator_account(target)?;
         }
 	}
 }
@@ -70,5 +97,33 @@ impl<T: Trait> Module<T> {
     
         let now = <system::Module<T>>::block_number();
         Self::deposit_event(RawEvent::AccountDrained(target, amount, now));
-    }
+	}
+	
+	pub fn add_validator_account(target: T::AccountId) -> DispatchResult {
+		let mut validators = Validators::<T>::get();
+
+		match validators.binary_search(&target) {
+			Ok(_) => Err(Error::<T>::ValidatorExists.into()),
+			// If the search fails, the caller is not a member and we learned the index where
+			// they should be inserted
+			Err(index) => {
+				validators.insert(index, target.clone());
+				Validators::<T>::put(validators);
+				Ok(())
+			}
+		}
+	}
+
+	pub fn remove_validator_account(target: T::AccountId) -> DispatchResult {
+		let mut validators = Validators::<T>::get();
+
+		match validators.binary_search(&target) {
+			Ok(index) => {
+				validators.remove(index);
+				Validators::<T>::put(validators);
+				Ok(())
+			},
+			Err(_) => Err(Error::<T>::ValidatorNotExists.into()),
+		}
+	}
 }
