@@ -6,11 +6,12 @@
 //! it only checks for signed extrinsics to enable arbitrary minting/slashing!!!
 
 use frame_support::{
-	decl_event, decl_module, decl_storage, decl_error, ensure,
+	decl_event, decl_module, decl_storage, decl_error, ensure, debug,
 	traits::{Currency, OnUnbalanced, ReservableCurrency, Vec},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_runtime::{DispatchResult};
+use codec::{Decode, Encode};
 
 // balance type using reservable currency type
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -46,25 +47,28 @@ decl_error! {
 		ValidatorExists,
 		ValidatorNotExists,
 		TransactionExists,
+		TransactionNotExists,
 	}
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct StellarTransaction <BalanceOf, AccountId>{
+	pub amount: BalanceOf,
+	pub target: AccountId,
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TFTBridgeModule {
 		pub Validators get(fn validator_accounts): Vec<T::AccountId>;
-		pub Transactions get(fn stellar_transactions): map hasher(blake2_128_concat) Vec<u8> => Vec<T::AccountId>;
+
+		pub Transactions get(fn transaction): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<BalanceOf<T>, T::AccountId>;
+		pub TransactionValidators get(fn transaction_validators): map hasher(blake2_128_concat) Vec<u8> => Vec<T::AccountId>;
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
-
-		#[weight = 10_000]
-		fn swap_from_stellar(origin, target: T::AccountId, amount: BalanceOf<T>){
-            let _ = ensure_signed(origin)?;
-            Self::mint_tft(target, amount);
-        }
 
         #[weight = 10_000]
 		fn swap_to_stellar(origin, target: T::AccountId, amount: BalanceOf<T>){
@@ -85,16 +89,16 @@ decl_module! {
 		}
 		
 		#[weight = 10_000]
-		fn propose_transaction(origin, transaction: Vec<u8>){
+		fn propose_transaction(origin, transaction: Vec<u8>, target: T::AccountId, amount: BalanceOf<T>){
             ensure_signed(origin)?;
-            Self::propose_stellar_transaction(transaction)?;
+            Self::propose_stellar_transaction(transaction, target, amount)?;
 		}
 		
 		#[weight = 10_000]
 		fn vote_transaction(origin, transaction: Vec<u8>){
             ensure_signed(origin.clone())?;
-            Self::vote_transaction(origin, transaction)?;
-        }
+			Self::vote_transaction(origin, transaction)?;
+		}
 	}
 }
 
@@ -109,9 +113,6 @@ impl<T: Trait> Module<T> {
     pub fn burn_tft(target: T::AccountId, amount: BalanceOf<T>) {
         let imbalance = T::Currency::slash(&target, amount).0;
         T::Burn::on_unbalanced(imbalance);
-    
-        let now = <system::Module<T>>::block_number();
-        Self::deposit_event(RawEvent::AccountDrained(target, amount, now));
 	}
 	
 	pub fn add_validator_account(target: T::AccountId) -> DispatchResult {
@@ -142,24 +143,30 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	pub fn propose_stellar_transaction(transaction: Vec<u8>) -> DispatchResult {
-		ensure!(!Transactions::<T>::contains_key(transaction.clone()), Error::<T>::TransactionExists);
-
+	pub fn propose_stellar_transaction(tx_id: Vec<u8>, target: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+		ensure!(!Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionExists);
+		
+		let tx = StellarTransaction {
+			amount,
+			target
+		};
+		Transactions::<T>::insert(tx_id.clone(), &tx);
+		
+		ensure!(TransactionValidators::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionNotExists);
 		// list where voters are kept
 		let vec: Vec<T::AccountId> = Vec::new();
+		TransactionValidators::<T>::insert(&tx_id.clone(), vec);
 
-		Transactions::<T>::insert(&transaction.clone(), vec);
-
-		Self::deposit_event(RawEvent::TransactionProposed(transaction));
+		Self::deposit_event(RawEvent::TransactionProposed(tx_id));
 
 		Ok(())
 	}
 
-	pub fn vote_stellar_transaction(validator: T::AccountId, transaction: Vec<u8>) -> DispatchResult {
-		ensure!(Transactions::<T>::contains_key(transaction.clone()), Error::<T>::TransactionExists);
+	pub fn vote_stellar_transaction(validator: T::AccountId, tx_id: Vec<u8>) -> DispatchResult {
+		ensure!(!TransactionValidators::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionExists);
 		
 		// fetch the validators list
-		let mut stellar_transaction_validators = Transactions::<T>::get(transaction.clone());
+		let mut stellar_transaction_validators = TransactionValidators::<T>::get(tx_id.clone());
 		
 		let validators = Validators::<T>::get();
 		match validators.binary_search(&validator) {
@@ -170,7 +177,17 @@ impl<T: Trait> Module<T> {
 					Ok(_) => Err(Error::<T>::ValidatorExists.into()),
 					Err(index) => {
 						stellar_transaction_validators.insert(index, validator.clone());
-						Transactions::<T>::insert(transaction.clone(), stellar_transaction_validators);
+						debug::info!("inserting vote for validator {:?}", validator.clone());
+						TransactionValidators::<T>::insert(tx_id.clone(), &stellar_transaction_validators);
+
+						// If majority aggrees on the transaction, mint tokens to target address
+						if stellar_transaction_validators.len() > (validators.len() + 1) {
+							let tx = Transactions::<T>::get(&tx_id.clone());
+
+							debug::info!("enough votes, minting transaction...");
+							Self::mint_tft(tx.target, tx.amount);
+						}
+
 						Ok(())
 					}
 				}
