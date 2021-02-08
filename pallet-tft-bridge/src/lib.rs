@@ -72,7 +72,7 @@ decl_module! {
 
         #[weight = 10_000]
 		fn swap_to_stellar(origin, target: T::AccountId, amount: BalanceOf<T>){
-            let _ = ensure_signed(origin)?;
+            ensure_signed(origin)?;
             Self::burn_tft(target, amount);
 		}
 		
@@ -96,8 +96,8 @@ decl_module! {
 		
 		#[weight = 10_000]
 		fn vote_transaction(origin, transaction: Vec<u8>){
-            ensure_signed(origin.clone())?;
-			Self::vote_transaction(origin, transaction)?;
+            let validator = ensure_signed(origin.clone())?;
+			Self::vote_stellar_transaction(validator, transaction)?;
 		}
 	}
 }
