@@ -63,52 +63,16 @@ use frame_support::traits::{
 };
 use frame_system::{
 	ensure_signed, ensure_root,
-	offchain::{
-		AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer,
-	},
 };
 use fixed::{types::U16F16};
 pub use weights::WeightInfo;
 use pallet_tft_price_oracle;
 use sp_runtime::traits::SaturatedConversion;
 
-use sp_core::crypto::KeyTypeId;
-pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"tft!");
-
-pub mod crypto {
-    use crate::KEY_TYPE;
-    use sp_core::sr25519::Signature as Sr25519Signature;
-    use sp_runtime::{
-        app_crypto::{app_crypto, sr25519},
-        traits::Verify,
-        MultiSignature, MultiSigner,
-    };
-
-    app_crypto!(sr25519, KEY_TYPE);
-
-    pub struct AuthId;
-
-    // implemented for ocw-runtime
-    impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for AuthId {
-        type RuntimeAppPublic = Public;
-        type GenericSignature = sp_core::sr25519::Signature;
-        type GenericPublic = sp_core::sr25519::Public;
-    }
-
-    // implemented for mock runtime in test
-    impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-    for AuthId
-    {
-        type RuntimeAppPublic = Public;
-        type GenericSignature = sp_core::sr25519::Signature;
-        type GenericPublic = sp_core::sr25519::Public;
-    }
-}
-
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type MaxLocksOf<T> = <<T as Config>::Currency as LockableCurrency<<T as frame_system::Trait>::AccountId>>::MaxLocks;
 
-pub trait Config: frame_system::Trait + CreateSignedTransaction<Call<Self>> {
+pub trait Config: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
@@ -123,10 +87,6 @@ pub trait Config: frame_system::Trait + CreateSignedTransaction<Call<Self>> {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
-
-	// Add other types and constants required to configure this pallet.
-    type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
-    type Call: From<Call<Self>>;
 }
 
 /// A vesting schedule over a currency. This allows a particular currency to have vesting limits
@@ -397,67 +357,13 @@ decl_module! {
 
 			Ok(())
 		}
-
-		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn force_stop_vesting(
-			origin,
-			target: T::AccountId,
-		) -> DispatchResult {
-			ensure_signed(origin)?;
-
-			debug::info!("unlocking vesting schedule for {:?}", &target);
-			T::Currency::remove_lock(VESTING_ID, &target);
-			Vesting::<T>::remove(&target);
-			
-			let mut vesters = AccountsVesting::<T>::get();
-			match vesters.binary_search(&target) {
-				Ok(index) => {
-					vesters.remove(index);
-					AccountsVesting::<T>::put(vesters);
-				},
-				Err(_) => ()
-			}
-
-			Self::deposit_event(RawEvent::VestingCompleted(target.clone()));
-
-			Ok(())
-		}
-
-		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn force_recalculate_vesting(
-			origin,
-			target: T::AccountId,
-			block_number: T::BlockNumber
-		) -> DispatchResult {
-			ensure_signed(origin)?;
-
-			let vesting = Self::vesting(&target).ok_or(Error::<T>::NotVesting)?;
-
-			// calculate locked tokens at block_number
-			let locked_then = vesting.locked_at::<T::BlockNumberToBalance>(block_number);
-			debug::info!("tokens locked at block {:?}: {:?}", block_number, locked_then);
-
-			// update the lock with tokens locked at block_number x
-			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-			debug::info!("updating vesting lock for {:?}", &target);
-			T::Currency::set_lock(VESTING_ID, &target, locked_then, reasons);
-			
-			// update the schedule with the last released block
-			let mut schedule = Vesting::<T>::get(target.clone()).ok_or(Error::<T>::NotVesting)?;
-			schedule.last_released_block = block_number;
-			Vesting::<T>::insert(target.clone(), schedule);
-
-			Self::deposit_event(RawEvent::VestingUpdated(target.clone(), locked_then));
-
-			Ok(())
-		}
-
-		fn offchain_worker(block_number: T::BlockNumber) {
+		
+		fn on_finalize(block_number: T::BlockNumber) {
 			match Self::check_vesting_unlocks(block_number) {
-				Ok(_) => debug::info!("worker executed"),
+				Ok(_) => debug::info!("entering on finalize"),
 				Err(err) => debug::info!("err: {:?}", err)
 			}
-        }
+		}
 	}
 }
 
@@ -505,27 +411,9 @@ impl<T: Config> Module<T> {
 			debug::info!("checking schedule for account {:?}", &vesting_account);
 			let stored_schedule = Vesting::<T>::get(&vesting_account).ok_or(Error::<T>::NotVesting)?;
 
-
 			// If the TFT Price in storage exceeds the price set on the vesting schedule we unlock all vested tokens!
 			if tft_price > stored_schedule.tft_price {
-				let signer = Signer::<T, T::AuthorityId>::any_account();
-
-				let result = signer.send_signed_transaction(|_acct| {
-					Call::force_stop_vesting(vesting_account.clone())
-				});
-
-				// Display error if the signed tx fails.
-				if let Some((acc, res)) = result {
-					if res.is_err() {
-						debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
-					}
-					// Transaction is sent successfully
-					debug::info!("releasing schedule for {:?}", &vesting_account);
-					return Ok(());
-				}
-				// The case of `None`: no account is available for sending
-				debug::error!("No local account available");
-				break
+				Self::force_stop_vesting(vesting_account.clone())?;
 			}
 
 			debug::info!("calculating check for {:?}", &vesting_account);
@@ -545,8 +433,6 @@ impl<T: Config> Module<T> {
 				break
 			}
 
-			debug::info!("schedule per block {:?}", &stored_schedule.per_block);
-
 			// calculate the difference in blocks between the starting block and now
 			let diff = current_block_u64 - starting_block_u64;
 			let current_month = diff / AVG_MONTHLY_BLOCKS;
@@ -565,24 +451,49 @@ impl<T: Config> Module<T> {
 				}
 				let next_month_block = T::BlockNumber::from(month_block as u32);
 
-				let signer = Signer::<T, T::AuthorityId>::any_account();
-
-				let result = signer.send_signed_transaction(|_acct| {
-					Call::force_recalculate_vesting(vesting_account.clone(), next_month_block)
-				});
-
-				// Display error if the signed tx fails.
-				if let Some((acc, res)) = result {
-					if res.is_err() {
-						debug::error!("failure: offchain_signed_tx: tx sent: {:?}", acc.id);
-					}
-					// Transaction is sent successfully
-					return Ok(());
-				}
-				// The case of `None`: no account is available for sending
-				debug::error!("No local account available");
+				Self::force_recalculate_vesting(vesting_account.clone(), next_month_block)?;
 			}
 		}
+		Ok(())
+	}
+
+	fn force_stop_vesting(target: T::AccountId) -> DispatchResult {
+		debug::info!("unlocking vesting schedule for {:?}", &target);
+		T::Currency::remove_lock(VESTING_ID, &target);
+		Vesting::<T>::remove(&target);
+		
+		let mut vesters = AccountsVesting::<T>::get();
+		match vesters.binary_search(&target) {
+			Ok(index) => {
+				vesters.remove(index);
+				AccountsVesting::<T>::put(vesters);
+			},
+			Err(_) => ()
+		}
+
+		Self::deposit_event(RawEvent::VestingCompleted(target.clone()));
+
+		Ok(())
+	}
+
+	fn force_recalculate_vesting(target: T::AccountId, block_number: T::BlockNumber) -> DispatchResult {
+		let vesting = Self::vesting(&target).ok_or(Error::<T>::NotVesting)?;
+
+		// calculate locked tokens at block_number
+		let locked_then = vesting.locked_at::<T::BlockNumberToBalance>(block_number);
+		debug::info!("tokens locked at block {:?}: {:?}", block_number, locked_then);
+
+		// update the lock with tokens locked at block_number x
+		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+		debug::info!("updating vesting lock for {:?}", &target);
+		T::Currency::set_lock(VESTING_ID, &target, locked_then, reasons);
+		
+		// update the schedule with the last released block
+		let mut schedule = Vesting::<T>::get(target.clone()).ok_or(Error::<T>::NotVesting)?;
+		schedule.last_released_block = block_number;
+		Vesting::<T>::insert(target.clone(), schedule);
+
+		Self::deposit_event(RawEvent::VestingUpdated(target.clone(), locked_then));
 
 		Ok(())
 	}
