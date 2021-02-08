@@ -196,7 +196,7 @@ decl_storage! {
 					per_block: per_block,
 					starting_block: begin,
 					tft_price: U16F16::from_num(0.20),
-					last_released_block: T::BlockNumber::from(0),
+					last_released_block: T::BlockNumber::from(0 as u32),
 				});
 				let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);

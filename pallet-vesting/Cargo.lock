@@ -1129,6 +1129,7 @@ dependencies = [
 [[package]]
 name = "pallet-tft-price-oracle"
 version = "2.0.1"
+source = "git+https://github.com/threefoldtech/substrate-pallet-tft-price#671352045e4eb98849a7125c024886d3a87419d4"
 dependencies = [
  "frame-support",
  "frame-system",
