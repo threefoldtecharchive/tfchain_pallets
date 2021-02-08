@@ -90,8 +90,8 @@ decl_module! {
 		
 		#[weight = 10_000]
 		fn propose_transaction(origin, transaction: Vec<u8>, target: T::AccountId, amount: BalanceOf<T>){
-            ensure_signed(origin)?;
-            Self::propose_stellar_transaction(transaction, target, amount)?;
+            let validator = ensure_signed(origin)?;
+            Self::propose_stellar_transaction(validator, transaction, target, amount)?;
 		}
 		
 		#[weight = 10_000]
@@ -143,7 +143,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	pub fn propose_stellar_transaction(tx_id: Vec<u8>, target: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+	pub fn propose_stellar_transaction(origin: T::AccountId, tx_id: Vec<u8>, target: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
 		ensure!(!Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionExists);
 		
 		let tx = StellarTransaction {
@@ -153,9 +153,13 @@ impl<T: Trait> Module<T> {
 		Transactions::<T>::insert(tx_id.clone(), &tx);
 		
 		ensure!(TransactionValidators::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionNotExists);
+		
 		// list where voters are kept
-		let vec: Vec<T::AccountId> = Vec::new();
-		TransactionValidators::<T>::insert(&tx_id.clone(), vec);
+		let mut voters: Vec<T::AccountId> = Vec::new();
+		// init the list with the validator proposing this transaction
+		voters.push(origin);
+
+		TransactionValidators::<T>::insert(&tx_id.clone(), voters);
 
 		Self::deposit_event(RawEvent::TransactionProposed(tx_id));
 
