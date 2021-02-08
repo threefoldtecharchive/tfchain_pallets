@@ -26,8 +26,8 @@ package = "substrate-fixed"
 
 [dependencies.pallet-tft-price-oracle]
 default-features = false
-path = "../pallet-tft-price"
-# git = "https://github.com/threefoldtech/substrate-pallet-tft-price"
+# path = "../pallet-tft-price"
+git = "https://github.com/threefoldtech/substrate-pallet-tft-price"
 package = "pallet-tft-price-oracle"
 
 [dependencies]
