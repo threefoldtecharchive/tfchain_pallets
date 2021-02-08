@@ -5,7 +5,7 @@ edition = '2018'
 homepage = 'threefold.io'
 license = 'Apache'
 name = 'pallet-tft-bridge'
-repository = 'https://github.com/threefoldtech/substrate-pallet-tft-bridge'
+repository = 'https://github.com/threefoldtech/substrate-pallets'
 version = '2.0.1'
 
 [package.metadata.docs.rs]

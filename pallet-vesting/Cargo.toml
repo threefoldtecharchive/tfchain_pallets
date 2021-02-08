@@ -1,13 +1,14 @@
 [package]
 name = "pallet-vesting"
-version = "2.0.1"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
-description = "FRAME pallet for manage vesting"
-readme = "README.md"
+[package]
+authors = ['Threefoldtech <https://github.com/threefoldtech>']
+description = 'Substrate TFT Price fetching pallet'
+edition = '2018'
+homepage = 'threefold.io'
+license = 'Apache'
+name = 'pallet-vesting'
+repository = 'https://github.com/threefoldtech/substrate-pallets'
+version = '2.0.1'
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
