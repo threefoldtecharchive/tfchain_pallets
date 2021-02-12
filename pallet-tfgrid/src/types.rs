@@ -41,21 +41,25 @@ pub struct Entity<T: super::Trait> {
 	pub name: Vec<u8>,
 	pub country_id: u64,
 	pub city_id: u64,
-	pub pub_key: T::AccountId,
+	pub address: T::AccountId,
+	pub pub_key: sp_core::ed25519::Public
 }
 
 impl<T> Default for Entity<T>
     where T: super::Trait
 {
     fn default() -> Entity<T> {
-		let pub_key: T::AccountId = PALLET_ID.into_account();
-		
+		let address: T::AccountId = PALLET_ID.into_account();
+		let mut bytes = [0u8; 32];
+		bytes.copy_from_slice(&address.encode());
+
         Entity { 
 			entity_id: 0,
 			name: [0].to_vec(),
 			country_id: 0,
 			city_id: 0,
-			pub_key
+			address,
+			pub_key:  sp_core::ed25519::Public::from_raw(bytes)
         }
     }
 }

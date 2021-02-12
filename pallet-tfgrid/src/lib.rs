@@ -166,7 +166,7 @@ decl_module! {
 			ensure!(Entities::<T>::contains_key(stored_farm.entity_id), Error::<T>::EntityNotExists);
 			let stored_entity = Entities::<T>::get(stored_farm.entity_id);
 
-			ensure!(stored_entity.pub_key == pub_key, Error::<T>::CannotDeleteFarm);
+			ensure!(stored_entity.address == pub_key, Error::<T>::CannotDeleteFarm);
 
 			// delete farm
 			Farms::remove(id);
@@ -241,6 +241,12 @@ decl_module! {
 			
 			ensure!(!EntitiesByPubkeyID::<T>::contains_key(&pub_key), Error::<T>::EntityWithPubkeyExists);
 
+			// Decode entity's public key
+			let account_vec = &pub_key.encode();
+			ensure!(account_vec.len() == 32, "AccountId must be 32 bytes.");
+			let mut bytes = [0u8; 32];
+			bytes.copy_from_slice(&account_vec);
+
 			let id = EntityID::get();
 
 			let entity = types::Entity::<T> {
@@ -248,7 +254,8 @@ decl_module! {
 				name: name.clone(),
 				country_id,
 				city_id,
-				pub_key: pub_key.clone(), 
+				address: pub_key.clone(),
+				pub_key: sp_core::ed25519::Public::from_raw(bytes)
 			};
 
 			Entities::insert(&id, &entity);
@@ -271,14 +278,15 @@ decl_module! {
 			ensure!(Entities::<T>::contains_key(&stored_entity_id), Error::<T>::EntityNotExists);
 			let stored_entity = Entities::<T>::get(stored_entity_id);
 
-			ensure!(stored_entity.pub_key == pub_key, Error::<T>::CannotUpdateEntity);
+			ensure!(stored_entity.address == pub_key, Error::<T>::CannotUpdateEntity);
 
 			let entity = types::Entity::<T> {
 				entity_id: stored_entity_id,
 				name: name.clone(),
 				country_id,
 				city_id,
-				pub_key: pub_key.clone(), 
+				address: pub_key.clone(),
+				pub_key: stored_entity.pub_key
 			};
 
 			// overwrite entity
@@ -305,7 +313,7 @@ decl_module! {
 			ensure!(Entities::<T>::contains_key(&stored_entity_id), Error::<T>::EntityNotExists);
 			let stored_entity = Entities::<T>::get(stored_entity_id);
 
-			ensure!(stored_entity.pub_key == pub_key, Error::<T>::CannotDeleteEntity);
+			ensure!(stored_entity.address == pub_key, Error::<T>::CannotDeleteEntity);
 
 			// Remove entity from storage
 			Entities::<T>::remove(&stored_entity_id);
