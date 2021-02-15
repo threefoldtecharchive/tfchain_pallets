@@ -72,11 +72,11 @@ decl_event!(
         NodeStored(u32, u32, types::Resources, types::Location, u32, u32),
         NodeDeleted(u32),
 
-        EntityStored(u32, Vec<u8>, u32, u32, AccountId),
+        EntityStored(u32, Vec<u8>, u32, u32, sp_core::ed25519::Public, AccountId),
         EntityUpdated(u32, Vec<u8>, u32, u32, AccountId),
         EntityDeleted(u32),
 
-        TwinStored(AccountId, u32),
+        TwinStored(AccountId, sp_core::ed25519::Public, u32),
         TwinUpdated(u32),
 
         TwinEntityStored(u32, u32, Vec<u8>),
@@ -236,13 +236,14 @@ decl_module! {
 
             ensure!(!EntitiesByPubkeyID::<T>::contains_key(&pub_key), Error::<T>::EntityWithPubkeyExists);
 
-            // Decode entity's public key
-            let account_vec = &pub_key.encode();
-            ensure!(account_vec.len() == 32, "AccountId must be 32 bytes.");
-            let mut bytes = [0u8; 32];
-            bytes.copy_from_slice(&account_vec);
+			let id = EntityID::get();
 
-            let id = EntityID::get();
+			// Decode entity's public key
+			let account_vec = &pub_key.encode();
+			ensure!(account_vec.len() == 32, "AccountId must be 32 bytes.");
+			let mut bytes = [0u8; 32];
+			bytes.copy_from_slice(&account_vec);
+			let ed25519_pubkey = sp_core::ed25519::Public::from_raw(bytes);
 
             let entity = types::Entity::<T::AccountId> {
                 entity_id: id,
@@ -250,7 +251,7 @@ decl_module! {
                 country_id,
                 city_id,
                 address: pub_key.clone(),
-                pub_key: sp_core::ed25519::Public::from_raw(bytes)
+                pub_key: ed25519_pubkey.clone()
             };
 
             Entities::<T>::insert(&id, &entity);
@@ -258,7 +259,7 @@ decl_module! {
             EntitiesByPubkeyID::<T>::insert(&pub_key, id);
             EntityID::put(id + 1);
 
-            Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, pub_key));
+            Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, ed25519_pubkey, pub_key));
 
             Ok(())
         }
@@ -328,13 +329,21 @@ decl_module! {
         pub fn create_twin(origin) -> dispatch::DispatchResult {
             let pub_key = ensure_signed(origin)?;
 
-            let twin_id = TwinID::get();
+			// Decode twins's public key
+			let account_vec = &pub_key.encode();
+			ensure!(account_vec.len() == 32, "AccountId must be 32 bytes.");
+			let mut bytes = [0u8; 32];
+			bytes.copy_from_slice(&account_vec);
+			let ed25519_pubkey = sp_core::ed25519::Public::from_raw(bytes);
 
-            let twin = types::Twin::<T::AccountId> {
-                twin_id,
-                pub_key: pub_key.clone(),
-                entities: Vec::new(),
-            };
+			let twin_id = TwinID::get();
+
+			let twin = types::Twin::<T::AccountId> {
+				twin_id,
+				address: pub_key.clone(),
+				entities: Vec::new(),
+				pub_key: ed25519_pubkey.clone(),
+			};
 
             Twins::<T>::insert(&twin_id, &twin);
             TwinID::put(twin_id + 1);
@@ -342,12 +351,12 @@ decl_module! {
             // add the twin id to this users map of twin ids
             let mut twins_by_pubkey = TwinsByPubkey::<T>::get(&pub_key.clone());
             twins_by_pubkey.push(twin_id);
-            TwinsByPubkey::<T>::insert(&pub_key.clone(), twins_by_pubkey);
+			TwinsByPubkey::<T>::insert(&pub_key.clone(), twins_by_pubkey);
 
-            Self::deposit_event(RawEvent::TwinStored(pub_key, twin_id));
-
-            Ok(())
-        }
+			Self::deposit_event(RawEvent::TwinStored(pub_key, ed25519_pubkey, twin_id));
+			
+			Ok(())
+		}
 
         // Method for twins only
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
@@ -361,7 +370,7 @@ decl_module! {
 
             let mut twin = Twins::<T>::get(&twin_id);
             // Make sure only the owner of this twin can call this method
-            ensure!(twin.pub_key == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
+            ensure!(twin.address == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
 
             let entity_proof = types::EntityProof{
                 entity_id,
@@ -427,7 +436,7 @@ decl_module! {
 
             let mut twin = Twins::<T>::get(&twin_id);
             // Make sure only the owner of this twin can call this method
-            ensure!(twin.pub_key == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
+            ensure!(twin.address == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
 
             ensure!(twin.entities.iter().any(|v| v.entity_id == entity_id), Error::<T>::EntityNotExists);
 
@@ -436,6 +445,9 @@ decl_module! {
 
             // Update twin
             Twins::<T>::insert(&twin_id, &twin);
+			let twin = Twins::<T>::get(&twin_id);
+			// Make sure only the owner of this twin can call this method
+			ensure!(twin.address == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
 
             Self::deposit_event(RawEvent::TwinEntityRemoved(twin_id, entity_id));
 
@@ -450,7 +462,7 @@ decl_module! {
 
             let twin = Twins::<T>::get(&twin_id);
             // Make sure only the owner of this twin can call this method
-            ensure!(twin.pub_key == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
+            ensure!(twin.address == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
 
             Twins::<T>::remove(&twin_id);
 

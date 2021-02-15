@@ -55,7 +55,8 @@ pub struct Twin<AccountId> {
     pub twin_id: u32,
     //substrate account id = public key (32 bytes)
     //also used by PAN network
-    pub pub_key: AccountId,
+	pub address: AccountId,
+	pub pub_key: sp_core::ed25519::Public,
     //link to person's or companies who own this twin
     pub entities: Vec<EntityProof>,
 }
