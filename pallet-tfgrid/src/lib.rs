@@ -445,9 +445,6 @@ decl_module! {
 
             // Update twin
             Twins::<T>::insert(&twin_id, &twin);
-			let twin = Twins::<T>::get(&twin_id);
-			// Make sure only the owner of this twin can call this method
-			ensure!(twin.address == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
 
             Self::deposit_event(RawEvent::TwinEntityRemoved(twin_id, entity_id));
 
