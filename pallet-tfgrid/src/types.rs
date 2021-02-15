@@ -1,112 +1,108 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_support::{
-	traits::{
-		Vec,
-    },
-};
+use frame_support::traits::Vec;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Farm {
-	pub id: u64,
-	pub name: Vec<u8>,
-	pub entity_id: u64,
-	pub twin_id: u64,
-	pub pricing_policy_id: u64,
-	pub certification_type: CertificationType,
-	pub country_id: u64,
-	pub city_id: u64
+    pub id: u32,
+    pub name: Vec<u8>,
+    pub entity_id: u32,
+    pub twin_id: u32,
+    pub pricing_policy_id: u32,
+    pub certification_type: CertificationType,
+    pub country_id: u32,
+    pub city_id: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Node<AccountId> {
-	pub id: u64,
-	pub farm_id: u64,
-	//public key of parity
-	pub pub_key: AccountId,
-	pub resources: Resources,
-	pub location: Location,
-	pub country_id: u64,
-	pub city_id: u64
+    pub id: u32,
+    pub farm_id: u32,
+    //public key of parity
+    pub pub_key: AccountId,
+    pub resources: Resources,
+    pub location: Location,
+    pub country_id: u32,
+    pub city_id: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Gateway<AccountId> {
-	pub id: u64,
-	pub farm_id: u64,
-	//public key of parity
-	pub pub_key: AccountId,
-	pub location: Location,
-	pub country_id: u64,
-	pub city_id: u64,
-	pub free_ip4: u32
+    pub id: u32,
+    pub farm_id: u32,
+    //public key of parity
+    pub pub_key: AccountId,
+    pub location: Location,
+    pub country_id: u32,
+    pub city_id: u32,
+    pub free_ip4: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Entity<AccountId> {
-	pub entity_id: u64,
-	pub name: Vec<u8>,
-	pub country_id: u64,
-	pub city_id: u64,
-	pub address: AccountId,
-	pub pub_key: sp_core::ed25519::Public
+    pub entity_id: u32,
+    pub name: Vec<u8>,
+    pub country_id: u32,
+    pub city_id: u32,
+    pub address: AccountId,
+    pub pub_key: sp_core::ed25519::Public,
 }
 
 //digital twin
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Twin<AccountId> {
-	pub twin_id: u64,
-	//substrate account id = public key (32 bytes)
-	//also used by PAN network	
-	pub pub_key: AccountId,
-	//link to person's or companies who own this twin
-	pub entities: Vec<EntityProof>
+    pub twin_id: u32,
+    //substrate account id = public key (32 bytes)
+    //also used by PAN network
+    pub pub_key: AccountId,
+    //link to person's or companies who own this twin
+    pub entities: Vec<EntityProof>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct EntityProof {
-	pub entity_id: u64,
-	pub signature: Vec<u8>
+    pub entity_id: u32,
+    pub signature: Vec<u8>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug, Copy)]
 pub struct Resources {
-	pub hru: u64,
-	pub sru: u64,
-	pub cru: u64,
-	pub mru: u64,
+    pub hru: u32,
+    pub sru: u32,
+    pub cru: u32,
+    pub mru: u32,
 }
 
 // Store Location long and lat as string
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Location {
-	pub longitude: Vec<u8>,
-	pub latitude: Vec<u8>
+    pub longitude: Vec<u8>,
+    pub latitude: Vec<u8>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct PricingPolicy {
-	pub id: u64,
-	pub name: Vec<u8>,
-	pub currency: Vec<u8>,
-	pub su: u64,
-	pub cu: u64,
-	pub nu: u64
+    pub id: u32,
+    pub name: Vec<u8>,
+    pub currency: Vec<u8>,
+    pub su: u32,
+    pub cu: u32,
+    pub nu: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct CertificationCodes {
-	pub id: u64,
-	pub name: Vec<u8>,
-	pub description: Vec<u8>,
-	pub certification_code_type: CertificationCodeType
+    pub id: u32,
+    pub name: Vec<u8>,
+    pub description: Vec<u8>,
+    pub certification_code_type: CertificationCodeType,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
 pub enum CertificationCodeType {
-	Farm,
-	Entity
+    Farm,
+    Entity,
 }
 
 impl Default for CertificationCodeType {
@@ -117,9 +113,9 @@ impl Default for CertificationCodeType {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug, Copy)]
 pub enum CertificationType {
-	None,
-	Silver,
-	Gold
+    None,
+    Silver,
+    Gold,
 }
 
 impl Default for CertificationType {
