@@ -33,13 +33,13 @@ decl_storage! {
 		pub Farms get(fn farms): map hasher(blake2_128_concat) u64 => types::Farm; 
 		pub FarmsByNameID get(fn farms_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u64;
 
-		pub Nodes get(fn nodes): map hasher(blake2_128_concat) u64 => types::Node;
+		pub Nodes get(fn nodes): map hasher(blake2_128_concat) u64 => types::Node<T::AccountId>;
 		
-		pub Entities get(fn entities): map hasher(blake2_128_concat) u64 => types::Entity<T>;
+		pub Entities get(fn entities): map hasher(blake2_128_concat) u64 => types::Entity<T::AccountId>;
 		pub EntitiesByPubkeyID get(fn entities_by_pubkey_id): map hasher(blake2_128_concat) T::AccountId => u64;
 		pub EntitiesByNameID get(fn entities_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u64;
 
-		pub Twins get(fn twins): map hasher(blake2_128_concat) u64 => types::Twin<T>;
+		pub Twins get(fn twins): map hasher(blake2_128_concat) u64 => types::Twin<T::AccountId>;
 		pub TwinsByPubkey get(fn twin_ids_by_pubkey): map hasher(blake2_128_concat) T::AccountId => Vec<u64>;
 
 		pub PricingPolicies get(fn pricing_policies): map hasher(blake2_128_concat) u64 => types::PricingPolicy;
@@ -63,15 +63,15 @@ decl_event!(
 		FarmStored(u64, Vec<u8>, u64, u64, u64, u64, u64, types::CertificationType),
 		FarmDeleted(u64),
 
-		NodeStored(u64, u64, u64, types::Resources, types::Location, u64, u64),
+		NodeStored(u64, u64, types::Resources, types::Location, u64, u64),
 		NodeDeleted(u64),
 
 		EntityStored(u64, Vec<u8>, u64, u64, AccountId),
 		EntityUpdated(u64, Vec<u8>, u64, u64, AccountId),
 		EntityDeleted(u64),
 
-		TwinStored(AccountId, u64, Vec<u8>),
-		TwinUpdated(u64, Vec<u8>),
+		TwinStored(AccountId, u64),
+		TwinUpdated(u64),
 
 		TwinEntityStored(u64, u64, Vec<u8>),
 		TwinEntityRemoved(u64, u64),
@@ -180,30 +180,23 @@ decl_module! {
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn create_node(origin, node: types::Node) -> dispatch::DispatchResult {
+		pub fn create_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
 			let pub_key = ensure_signed(origin)?;
 
-			ensure!(Twins::<T>::contains_key(node.twin_id), Error::<T>::TwinNotExists);
 			ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
-
-			let stored_twin = Twins::<T>::get(node.twin_id);
-			ensure!(stored_twin.pub_key == pub_key, Error::<T>::CannotCreateNode);
-
-			let stored_farm = Farms::get(node.farm_id);
-			ensure!(stored_farm.twin_id == node.twin_id, Error::<T>::CannotCreateNode);
 
 			let id = NodeID::get();
 
 			let mut new_node = node.clone();
 			new_node.id = id;
+			new_node.pub_key = pub_key;
 
-			Nodes::insert(id, &new_node);
+			Nodes::<T>::insert(id, &new_node);
 			NodeID::put(id + 1);
 
 			Self::deposit_event(RawEvent::NodeStored(
 				id, 
 				new_node.farm_id, 
-				new_node.twin_id, 
 				new_node.resources, 
 				new_node.location, 
 				new_node.country_id, 
@@ -217,16 +210,12 @@ decl_module! {
 		pub fn delete_node(origin, id: u64) -> dispatch::DispatchResult {
 			let pub_key = ensure_signed(origin)?;
 
-			ensure!(Nodes::contains_key(id), Error::<T>::NodeNotExists);
+			ensure!(Nodes::<T>::contains_key(id), Error::<T>::NodeNotExists);
 
-			let stored_node = Nodes::get(id);
+			let stored_node = Nodes::<T>::get(id);
+			ensure!(stored_node.pub_key == pub_key, Error::<T>::NodeNotExists);
 
-			// check if the user can delete this node based on the twin id
-			ensure!(Twins::<T>::contains_key(stored_node.twin_id), Error::<T>::TwinNotExists);
-			let stored_twin = Twins::<T>::get(stored_node.twin_id);
-			ensure!(stored_twin.pub_key == pub_key, Error::<T>::CannotDeleteNode);
-
-			Nodes::remove(id);
+			Nodes::<T>::remove(id);
 
 			Self::deposit_event(RawEvent::NodeDeleted(id));
 
@@ -249,7 +238,7 @@ decl_module! {
 
 			let id = EntityID::get();
 
-			let entity = types::Entity::<T> {
+			let entity = types::Entity::<T::AccountId> {
 				entity_id: id,
 				name: name.clone(),
 				country_id,
@@ -258,7 +247,7 @@ decl_module! {
 				pub_key: sp_core::ed25519::Public::from_raw(bytes)
 			};
 
-			Entities::insert(&id, &entity);
+			Entities::<T>::insert(&id, &entity);
 			EntitiesByNameID::insert(&name, id);
 			EntitiesByPubkeyID::<T>::insert(&pub_key, id);
 			EntityID::put(id + 1);
@@ -280,7 +269,7 @@ decl_module! {
 
 			ensure!(stored_entity.address == pub_key, Error::<T>::CannotUpdateEntity);
 
-			let entity = types::Entity::<T> {
+			let entity = types::Entity::<T::AccountId> {
 				entity_id: stored_entity_id,
 				name: name.clone(),
 				country_id,
@@ -290,7 +279,7 @@ decl_module! {
 			};
 
 			// overwrite entity
-			Entities::insert(&stored_entity_id, &entity);
+			Entities::<T>::insert(&stored_entity_id, &entity);
 			
 			// remove entity by name id
 			EntitiesByNameID::remove(&stored_entity.name);
@@ -330,19 +319,18 @@ decl_module! {
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn create_twin(origin, peer_id: Vec<u8>) -> dispatch::DispatchResult {
+		pub fn create_twin(origin) -> dispatch::DispatchResult {
 			let pub_key = ensure_signed(origin)?;
 
 			let twin_id = TwinID::get();
 
-			let twin = types::Twin::<T> {
+			let twin = types::Twin::<T::AccountId> {
 				twin_id,
 				pub_key: pub_key.clone(),
 				entities: Vec::new(),
-				peer_id: peer_id.clone()
 			};
 
-			Twins::insert(&twin_id, &twin);
+			Twins::<T>::insert(&twin_id, &twin);
 			TwinID::put(twin_id + 1);
 
 			// add the twin id to this users map of twin ids
@@ -350,31 +338,7 @@ decl_module! {
 			twins_by_pubkey.push(twin_id);
 			TwinsByPubkey::<T>::insert(&pub_key.clone(), twins_by_pubkey);
 
-			Self::deposit_event(RawEvent::TwinStored(pub_key, twin_id, peer_id));
-			
-			Ok(())
-		}
-
-		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn update_twin(origin, twin_id: u64, peer_id: Vec<u8>) -> dispatch::DispatchResult {
-			let pub_key = ensure_signed(origin)?;
-
-			ensure!(Twins::<T>::contains_key(&twin_id), Error::<T>::TwinNotExists);
-
-			let twin = Twins::<T>::get(&twin_id);
-			// Make sure only the owner of this twin can update his twin
-			ensure!(twin.pub_key == pub_key, Error::<T>::UnauthorizedToUpdateTwin);
-
-			let updated_twin = types::Twin::<T> {
-				twin_id,
-				pub_key: twin.pub_key,
-				entities: twin.entities,
-				peer_id: peer_id.clone()
-			};
-
-			Twins::insert(&twin_id, &updated_twin);
-
-			Self::deposit_event(RawEvent::TwinUpdated(twin_id, peer_id));
+			Self::deposit_event(RawEvent::TwinStored(pub_key, twin_id));
 			
 			Ok(())
 		}
@@ -442,7 +406,7 @@ decl_module! {
 			twin.entities.push(entity_proof);
 
 			// Update twin
-			Twins::insert(&twin_id, &twin);
+			Twins::<T>::insert(&twin_id, &twin);
 
 			Self::deposit_event(RawEvent::TwinEntityStored(twin_id, entity_id, signature));
 
@@ -465,7 +429,7 @@ decl_module! {
 			twin.entities.remove(index);
 
 			// Update twin
-			Twins::insert(&twin_id, &twin);
+			Twins::<T>::insert(&twin_id, &twin);
 
 			Self::deposit_event(RawEvent::TwinEntityRemoved(twin_id, entity_id));
 

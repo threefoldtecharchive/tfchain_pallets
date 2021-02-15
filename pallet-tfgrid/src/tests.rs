@@ -226,44 +226,9 @@ fn test_create_twin_works() {
 		let name = "foobar";
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 	});
 }
-
-#[test]
-fn test_update_twin_works() {
-	ExternalityBuilder::build().execute_with(|| {
-		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
-
-		let mut peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
-
-		let twin_id = 0;
-		peer_id = "some_other_peer_id";
-		assert_ok!(TemplateModule::update_twin(Origin::signed(alice()), twin_id, peer_id.as_bytes().to_vec()));
-	});
-}
-
-#[test]
-fn test_update_twin_fails_if_signed_by_someone_else() {
-	ExternalityBuilder::build().execute_with(|| {
-		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
-
-		let mut peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
-
-		let twin_id = 0;
-		peer_id = "some_other_peer_id";
-		assert_noop!(
-			TemplateModule::update_twin(Origin::signed(bob()), twin_id, peer_id.as_bytes().to_vec()),
-			Error::<TestRuntime>::UnauthorizedToUpdateTwin
-		);
-	});
-}
-
 
 #[test]
 fn test_delete_twin_works() {
@@ -273,8 +238,7 @@ fn test_delete_twin_works() {
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
 
-		let peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
 		let twin_id = 0;
 		assert_ok!(TemplateModule::delete_twin(Origin::signed(alice()), twin_id));
@@ -289,9 +253,8 @@ fn test_add_entity_to_twin() {
 		// Someone first creates an entity
 		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
 		// Bob creates an anonymous twin
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
 
 		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
 		let signature = "0cbebadf1ca1a60e6d9df4ffd9bd971ae91f1336a496154e25774b0037e1cdfe4ee518ccdce9d9006fedba8d76921dccbfe1692f7f4480e034d27749a814e206";
@@ -311,8 +274,7 @@ fn test_add_entity_to_twin_fails_with_invalid_signature() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
 
 		// Add Alice as entity to bob's twin
 
@@ -336,8 +298,7 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
 
 		// Add Alice as entity to bob's twin
 
@@ -364,13 +325,11 @@ fn test_create_twin_double_works() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
 		// First time creating twin succeeds
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
-		let peer_id = "some_peer_id";
 		// Second time creating twin succeeds
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 	});
 }
 
@@ -381,8 +340,7 @@ fn test_create_farm_works() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
 		let twin_id = 0;
 
@@ -467,8 +425,7 @@ fn test_create_farm_with_same_name_fails() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
 		let twin_id = 0;
 
@@ -501,8 +458,7 @@ fn create_node_works() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		let peer_id = "some_peer_id";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), peer_id.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
 		let twin_id = 0;
 
@@ -537,11 +493,11 @@ fn create_node_works() {
 		let node = super::types::Node {
 			id: 0,
 			farm_id: 0,
-			twin_id,
 			resources,
 			location,
 			city_id: 0,
-			country_id: 0
+			country_id: 0,
+			pub_key: alice()
 		};
 
 		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node));

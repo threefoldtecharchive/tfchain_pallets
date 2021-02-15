@@ -2,15 +2,10 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-    sp_runtime::{
-        traits::AccountIdConversion, ModuleId
-	},
 	traits::{
 		Vec,
     },
 };
-
-const PALLET_ID: ModuleId = ModuleId(*b"ABCDEFG!");
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Farm {
@@ -25,11 +20,11 @@ pub struct Farm {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct Node {
+pub struct Node<AccountId> {
 	pub id: u64,
 	pub farm_id: u64,
 	//public key of parity
-	pub pub_key: T::AccountId,
+	pub pub_key: AccountId,
 	pub resources: Resources,
 	pub location: Location,
 	pub country_id: u64,
@@ -37,70 +32,36 @@ pub struct Node {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct Gateway {
+pub struct Gateway<AccountId> {
 	pub id: u64,
 	pub farm_id: u64,
 	//public key of parity
-	pub pub_key: T::AccountId,
+	pub pub_key: AccountId,
 	pub location: Location,
 	pub country_id: u64,
-	pub city_id: u64
+	pub city_id: u64,
 	pub free_ip4: u32
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
-pub struct Entity<T: super::Trait> {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+pub struct Entity<AccountId> {
 	pub entity_id: u64,
 	pub name: Vec<u8>,
 	pub country_id: u64,
 	pub city_id: u64,
-	pub address: T::AccountId,
+	pub address: AccountId,
 	pub pub_key: sp_core::ed25519::Public
 }
 
-impl<T> Default for Entity<T>
-    where T: super::Trait
-{
-    fn default() -> Entity<T> {
-		let address: T::AccountId = PALLET_ID.into_account();
-		let mut bytes = [0u8; 32];
-		bytes.copy_from_slice(&address.encode());
-
-        Entity { 
-			entity_id: 0,
-			name: [0].to_vec(),
-			country_id: 0,
-			city_id: 0,
-			address,
-			pub_key:  sp_core::ed25519::Public::from_raw(bytes)
-        }
-    }
-}
-
 //digital twin
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
-pub struct Twin<T: super::Trait> {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+pub struct Twin<AccountId> {
 	pub twin_id: u64,
 	//substrate account id = public key (32 bytes)
 	//also used by PAN network	
-	pub pub_key: T::AccountId,
+	pub pub_key: AccountId,
 	//link to person's or companies who own this twin
 	pub entities: Vec<EntityProof>
-}
-
-impl<T> Default for Twin<T>
-    where T: super::Trait
-{
-    fn default() -> Twin<T> {
-		let pub_key = PALLET_ID.into_account();
-
-        Twin {
-			twin_id: 0,
-			pub_key,
-			peer_id: Vec::new(),
-			entities: Vec::new()
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
