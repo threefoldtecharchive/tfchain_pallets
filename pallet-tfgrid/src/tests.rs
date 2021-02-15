@@ -257,7 +257,7 @@ fn test_add_entity_to_twin() {
 		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
 
 		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
-		let signature = "0cbebadf1ca1a60e6d9df4ffd9bd971ae91f1336a496154e25774b0037e1cdfe4ee518ccdce9d9006fedba8d76921dccbfe1692f7f4480e034d27749a814e206";
+		let signature = "62c6762df685350c86facb9a31bfcc8dd8b2aef888fb6ca6ad1b42a51eb12b52b5a0998578adf0dae2cce13deaf92e55c237e42d1311ddafd0f0a13c358dcc03";
 		
 		let twin_id = 0;
 		let entity_id = 0;
@@ -303,7 +303,7 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 		// Add Alice as entity to bob's twin
 
 		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
-		let signature = "0cbebadf1ca1a60e6d9df4ffd9bd971ae91f1336a496154e25774b0037e1cdfe4ee518ccdce9d9006fedba8d76921dccbfe1692f7f4480e034d27749a814e206";
+		let signature = "62c6762df685350c86facb9a31bfcc8dd8b2aef888fb6ca6ad1b42a51eb12b52b5a0998578adf0dae2cce13deaf92e55c237e42d1311ddafd0f0a13c358dcc03";
 		
 		let twin_id = 0;
 		let entity_id = 0;
