@@ -28,11 +28,24 @@ pub struct Farm {
 pub struct Node {
 	pub id: u64,
 	pub farm_id: u64,
-	pub twin_id: u64,
+	//public key of parity
+	pub pub_key: T::AccountId,
 	pub resources: Resources,
 	pub location: Location,
 	pub country_id: u64,
 	pub city_id: u64
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct Gateway {
+	pub id: u64,
+	pub farm_id: u64,
+	//public key of parity
+	pub pub_key: T::AccountId,
+	pub location: Location,
+	pub country_id: u64,
+	pub city_id: u64
+	pub free_ip4: u32
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
@@ -64,11 +77,14 @@ impl<T> Default for Entity<T>
     }
 }
 
+//digital twin
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
 pub struct Twin<T: super::Trait> {
 	pub twin_id: u64,
+	//substrate account id = public key (32 bytes)
+	//also used by PAN network	
 	pub pub_key: T::AccountId,
-	pub peer_id: Vec<u8>,
+	//link to person's or companies who own this twin
 	pub entities: Vec<EntityProof>
 }
 
