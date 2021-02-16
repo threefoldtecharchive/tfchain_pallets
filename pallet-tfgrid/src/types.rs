@@ -36,7 +36,6 @@ pub struct Gateway<AccountId> {
     pub location: Location,
     pub country_id: u32,
     pub city_id: u32,
-    pub free_ip4: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
@@ -55,8 +54,8 @@ pub struct Twin<AccountId> {
     pub twin_id: u32,
     //substrate account id = public key (32 bytes)
     //also used by PAN network
-	pub address: AccountId,
-	pub pub_key: sp_core::ed25519::Public,
+    pub address: AccountId,
+    pub pub_key: sp_core::ed25519::Public,
     //link to person's or companies who own this twin
     pub entities: Vec<EntityProof>,
 }
