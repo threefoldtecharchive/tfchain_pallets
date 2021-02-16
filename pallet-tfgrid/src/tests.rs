@@ -497,7 +497,8 @@ fn create_node_works() {
 			location,
 			city_id: 0,
 			country_id: 0,
-			pub_key: alice()
+			address: alice(),
+			pub_key: sp_core::ed25519::Public::default()
 		};
 
 		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node));

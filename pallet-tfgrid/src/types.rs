@@ -19,23 +19,25 @@ pub struct Farm {
 pub struct Node<AccountId> {
     pub id: u32,
     pub farm_id: u32,
-    //public key of parity
-    pub pub_key: AccountId,
     pub resources: Resources,
     pub location: Location,
     pub country_id: u32,
     pub city_id: u32,
+    //public key of parity
+    pub address: AccountId,
+    pub pub_key: sp_core::ed25519::Public,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Gateway<AccountId> {
     pub id: u32,
     pub farm_id: u32,
-    //public key of parity
-    pub pub_key: AccountId,
     pub location: Location,
     pub country_id: u32,
     pub city_id: u32,
+    //public key of parity
+    pub address: AccountId,
+    pub pub_key: sp_core::ed25519::Public,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]

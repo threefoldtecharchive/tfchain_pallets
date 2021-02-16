@@ -187,7 +187,7 @@ decl_module! {
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn create_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
-            let pub_key = ensure_signed(origin)?;
+            let address = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
 
@@ -195,7 +195,8 @@ decl_module! {
 
             let mut new_node = node.clone();
             new_node.id = id;
-            new_node.pub_key = pub_key;
+            new_node.address = address.clone();
+            new_node.pub_key = Self::convert_account_to_ed25519(address);
 
             Nodes::<T>::insert(id, &new_node);
             NodeID::put(id + 1);
@@ -214,12 +215,12 @@ decl_module! {
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn delete_node(origin, id: u32) -> dispatch::DispatchResult {
-            let pub_key = ensure_signed(origin)?;
+            let address = ensure_signed(origin)?;
 
             ensure!(Nodes::<T>::contains_key(id), Error::<T>::NodeNotExists);
 
             let stored_node = Nodes::<T>::get(id);
-            ensure!(stored_node.pub_key == pub_key, Error::<T>::NodeNotExists);
+            ensure!(stored_node.address == address, Error::<T>::NodeNotExists);
 
             Nodes::<T>::remove(id);
 
@@ -230,36 +231,31 @@ decl_module! {
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn create_entity(origin, name: Vec<u8>, country_id: u32, city_id: u32) -> dispatch::DispatchResult {
-            let pub_key = ensure_signed(origin)?;
+            let address = ensure_signed(origin)?;
 
             ensure!(!EntitiesByNameID::contains_key(&name), Error::<T>::EntityWithNameExists);
 
-            ensure!(!EntitiesByPubkeyID::<T>::contains_key(&pub_key), Error::<T>::EntityWithPubkeyExists);
+            ensure!(!EntitiesByPubkeyID::<T>::contains_key(&address), Error::<T>::EntityWithPubkeyExists);
 
 			let id = EntityID::get();
 
-			// Decode entity's public key
-			let account_vec = &pub_key.encode();
-			ensure!(account_vec.len() == 32, "AccountId must be 32 bytes.");
-			let mut bytes = [0u8; 32];
-			bytes.copy_from_slice(&account_vec);
-			let ed25519_pubkey = sp_core::ed25519::Public::from_raw(bytes);
+			let ed25519_pubkey = Self::convert_account_to_ed25519(address.clone());
 
             let entity = types::Entity::<T::AccountId> {
                 entity_id: id,
                 name: name.clone(),
                 country_id,
                 city_id,
-                address: pub_key.clone(),
+                address: address.clone(),
                 pub_key: ed25519_pubkey.clone()
             };
 
             Entities::<T>::insert(&id, &entity);
             EntitiesByNameID::insert(&name, id);
-            EntitiesByPubkeyID::<T>::insert(&pub_key, id);
+            EntitiesByPubkeyID::<T>::insert(&address, id);
             EntityID::put(id + 1);
 
-            Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, ed25519_pubkey, pub_key));
+            Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, ed25519_pubkey, address));
 
             Ok(())
         }
@@ -327,20 +323,15 @@ decl_module! {
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn create_twin(origin) -> dispatch::DispatchResult {
-            let pub_key = ensure_signed(origin)?;
+            let address = ensure_signed(origin)?;
 
-			// Decode twins's public key
-			let account_vec = &pub_key.encode();
-			ensure!(account_vec.len() == 32, "AccountId must be 32 bytes.");
-			let mut bytes = [0u8; 32];
-			bytes.copy_from_slice(&account_vec);
-			let ed25519_pubkey = sp_core::ed25519::Public::from_raw(bytes);
+			let ed25519_pubkey = Self::convert_account_to_ed25519(address.clone());
 
 			let twin_id = TwinID::get();
 
 			let twin = types::Twin::<T::AccountId> {
 				twin_id,
-				address: pub_key.clone(),
+				address: address.clone(),
 				entities: Vec::new(),
 				pub_key: ed25519_pubkey.clone(),
 			};
@@ -349,11 +340,11 @@ decl_module! {
             TwinID::put(twin_id + 1);
 
             // add the twin id to this users map of twin ids
-            let mut twins_by_pubkey = TwinsByPubkey::<T>::get(&pub_key.clone());
+            let mut twins_by_pubkey = TwinsByPubkey::<T>::get(&address.clone());
             twins_by_pubkey.push(twin_id);
-			TwinsByPubkey::<T>::insert(&pub_key.clone(), twins_by_pubkey);
+			TwinsByPubkey::<T>::insert(&address.clone(), twins_by_pubkey);
 
-			Self::deposit_event(RawEvent::TwinStored(pub_key, ed25519_pubkey, twin_id));
+			Self::deposit_event(RawEvent::TwinStored(address, ed25519_pubkey, twin_id));
 			
 			Ok(())
 		}
@@ -385,13 +376,8 @@ decl_module! {
             let ed25519_signature = sp_core::ed25519::Signature::from_raw(decoded_signature_as_byteslice);
             // let sr25519_signature = sp_core::sr25519::Signature::from_raw(decoded_signature_as_byteslice);
 
-            // Decode entity's public key
-            let account_vec = &stored_entity.pub_key.encode();
-            ensure!(account_vec.len() == 32, "AccountId must be 32 bytes.");
-            let mut bytes = [0u8; 32];
-            bytes.copy_from_slice(&account_vec);
+            let entity_pubkey_ed25519 = stored_entity.pub_key;
 
-            let entity_pubkey_ed25519 = sp_core::ed25519::Public::from_raw(bytes);
             debug::info!("Public key: {:?}", entity_pubkey_ed25519);
 
             // let entity_pubkey_sr25519 = sp_core::sr25519::Public::from_raw(bytes);
@@ -524,5 +510,17 @@ decl_module! {
 
             Ok(())
         }
+    }
+}
+
+impl<T: Trait> Module<T> {
+    pub fn convert_account_to_ed25519(account: T::AccountId) -> sp_core::ed25519::Public {
+        // Decode entity's public key
+        let account_vec = &account.encode();
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&account_vec);
+        let ed25519_pubkey = sp_core::ed25519::Public::from_raw(bytes);
+
+        return ed25519_pubkey;
     }
 }
