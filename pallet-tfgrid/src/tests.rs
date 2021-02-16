@@ -240,7 +240,7 @@ fn test_delete_twin_works() {
 
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
-		let twin_id = 0;
+		let twin_id = 1;
 		assert_ok!(TemplateModule::delete_twin(Origin::signed(alice()), twin_id));
 	});
 }
@@ -257,10 +257,10 @@ fn test_add_entity_to_twin() {
 		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
 
 		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
-		let signature = "62c6762df685350c86facb9a31bfcc8dd8b2aef888fb6ca6ad1b42a51eb12b52b5a0998578adf0dae2cce13deaf92e55c237e42d1311ddafd0f0a13c358dcc03";
+		let signature = "fada0e25b5d5a9aead7f12fa69fbf74ff98cfdf56bf0d1069e4447e52936c4342853e1584f3939786bc199fc4167a146120047d7fae2615ca560735e2d3ad50f";
 		
-		let twin_id = 0;
-		let entity_id = 0;
+		let twin_id = 1;
+		let entity_id = 1;
 		
 		// Bob adds someone as entity to his twin
 		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.as_bytes().to_vec()));
@@ -281,8 +281,8 @@ fn test_add_entity_to_twin_fails_with_invalid_signature() {
 		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
 		let signature = "12fa1dfb735dc528a8d38bc0003c90521ea313ff82e4d0b2c683283e0fbc05001af5fd106ccf938356b9679790c6e7c4c4235c3ce2d88c787a1768ddcb401d08";
 		
-		let twin_id = 0;
-		let entity_id = 0;
+		let twin_id = 1;
+		let entity_id = 1;
 		
 		assert_noop!(
 			TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.as_bytes().to_vec()),
@@ -303,10 +303,10 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 		// Add Alice as entity to bob's twin
 
 		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
-		let signature = "62c6762df685350c86facb9a31bfcc8dd8b2aef888fb6ca6ad1b42a51eb12b52b5a0998578adf0dae2cce13deaf92e55c237e42d1311ddafd0f0a13c358dcc03";
+		let signature = "fada0e25b5d5a9aead7f12fa69fbf74ff98cfdf56bf0d1069e4447e52936c4342853e1584f3939786bc199fc4167a146120047d7fae2615ca560735e2d3ad50f";
 		
-		let twin_id = 0;
-		let entity_id = 0;
+		let twin_id = 1;
+		let entity_id = 1;
 		
 		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.as_bytes().to_vec()));
 
@@ -342,7 +342,7 @@ fn test_create_farm_works() {
 
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
-		let twin_id = 0;
+		let twin_id = 1;
 
 		let name = "test_farm";
 
@@ -353,7 +353,7 @@ fn test_create_farm_works() {
 			country_id: 0,
 			city_id: 0,
 			certification_type: super::types::CertificationType::None,
-			entity_id: 0,
+			entity_id: 1,
 			pricing_policy_id: 0,
 		};
 
@@ -366,7 +366,7 @@ fn test_create_farm_with_invalid_entity_id_fails() {
 	ExternalityBuilder::build().execute_with(|| {		
 		let farm_name = "test_farm";
 		
-		let twin_id = 0;
+		let twin_id = 1;
 		let entity_id = 654;
 
 		let farm = super::types::Farm{
@@ -396,7 +396,7 @@ fn test_create_farm_with_invalid_twin_id_fails() {
 		let name = "foobar";
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 		
-		let entity_id = 0;
+		let entity_id = 1;
 		let twin_id = 5342433;
 
 		let farm = super::types::Farm{
@@ -427,7 +427,7 @@ fn test_create_farm_with_same_name_fails() {
 
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
-		let twin_id = 0;
+		let twin_id = 1;
 
 		let farm_name = "test_farm";
 
@@ -435,7 +435,7 @@ fn test_create_farm_with_same_name_fails() {
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
-			entity_id: 0,
+			entity_id: 1,
 			country_id: 0,
 			city_id: 0,
 			certification_type: super::types::CertificationType::None,
@@ -460,7 +460,7 @@ fn create_node_works() {
 
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
 
-		let twin_id = 0;
+		let twin_id = 1;
 
 		let farm_name = "test_farm";
 
@@ -468,7 +468,7 @@ fn create_node_works() {
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
-			entity_id: 0,
+			entity_id: 1,
 			country_id: 0,
 			city_id: 0,
 			certification_type: super::types::CertificationType::None,
@@ -492,7 +492,7 @@ fn create_node_works() {
 
 		let node = super::types::Node {
 			id: 0,
-			farm_id: 0,
+			farm_id: 1,
 			resources,
 			location,
 			city_id: 0,

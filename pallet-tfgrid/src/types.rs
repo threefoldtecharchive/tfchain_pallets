@@ -24,8 +24,8 @@ pub struct Node<AccountId> {
     pub country_id: u32,
     pub city_id: u32,
     //public key of parity
-    pub address: AccountId,
     pub pub_key: sp_core::ed25519::Public,
+    pub address: AccountId,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -36,8 +36,8 @@ pub struct Gateway<AccountId> {
     pub country_id: u32,
     pub city_id: u32,
     //public key of parity
-    pub address: AccountId,
     pub pub_key: sp_core::ed25519::Public,
+    pub address: AccountId,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
@@ -47,7 +47,6 @@ pub struct Entity<AccountId> {
     pub country_id: u32,
     pub city_id: u32,
     pub address: AccountId,
-    pub pub_key: sp_core::ed25519::Public,
 }
 
 //digital twin
@@ -57,7 +56,6 @@ pub struct Twin<AccountId> {
     //substrate account id = public key (32 bytes)
     //also used by PAN network
     pub address: AccountId,
-    pub pub_key: sp_core::ed25519::Public,
     //link to person's or companies who own this twin
     pub entities: Vec<EntityProof>,
 }

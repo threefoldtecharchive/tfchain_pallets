@@ -72,11 +72,11 @@ decl_event!(
         NodeStored(u32, u32, types::Resources, types::Location, u32, u32, sp_core::ed25519::Public, AccountId),
         NodeDeleted(u32),
 
-        EntityStored(u32, Vec<u8>, u32, u32, sp_core::ed25519::Public, AccountId),
+        EntityStored(u32, Vec<u8>, u32, u32, AccountId),
         EntityUpdated(u32, Vec<u8>, u32, u32, AccountId),
         EntityDeleted(u32),
 
-        TwinStored(u32, sp_core::ed25519::Public, AccountId),
+        TwinStored(u32, AccountId),
         TwinUpdated(u32),
 
         TwinEntityStored(u32, u32, Vec<u8>),
@@ -244,15 +244,12 @@ decl_module! {
 			let mut id = EntityID::get();
             id = id+1;
 
-			let ed25519_pubkey = Self::convert_account_to_ed25519(address.clone());
-
             let entity = types::Entity::<T::AccountId> {
                 entity_id: id,
                 name: name.clone(),
                 country_id,
                 city_id,
                 address: address.clone(),
-                pub_key: ed25519_pubkey.clone()
             };
 
             Entities::<T>::insert(&id, &entity);
@@ -260,7 +257,7 @@ decl_module! {
             EntitiesByPubkeyID::<T>::insert(&address, id);
             EntityID::put(id);
 
-            Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, ed25519_pubkey, address));
+            Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, address));
 
             Ok(())
         }
@@ -283,7 +280,6 @@ decl_module! {
                 country_id,
                 city_id,
                 address: pub_key.clone(),
-                pub_key: stored_entity.pub_key
             };
 
             // overwrite entity
@@ -330,8 +326,6 @@ decl_module! {
         pub fn create_twin(origin) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
-			let ed25519_pubkey = Self::convert_account_to_ed25519(address.clone());
-
             let mut twin_id = TwinID::get();
             twin_id = twin_id+1;
 
@@ -339,7 +333,6 @@ decl_module! {
 				twin_id,
 				address: address.clone(),
 				entities: Vec::new(),
-				pub_key: ed25519_pubkey.clone(),
 			};
 
             Twins::<T>::insert(&twin_id, &twin);
@@ -350,7 +343,7 @@ decl_module! {
             twins_by_pubkey.push(twin_id);
 			TwinsByPubkey::<T>::insert(&address.clone(), twins_by_pubkey);
 
-			Self::deposit_event(RawEvent::TwinStored(twin_id, ed25519_pubkey, address));
+			Self::deposit_event(RawEvent::TwinStored(twin_id, address));
 			
 			Ok(())
 		}
@@ -382,7 +375,7 @@ decl_module! {
             let ed25519_signature = sp_core::ed25519::Signature::from_raw(decoded_signature_as_byteslice);
             // let sr25519_signature = sp_core::sr25519::Signature::from_raw(decoded_signature_as_byteslice);
 
-            let entity_pubkey_ed25519 = stored_entity.pub_key;
+            let entity_pubkey_ed25519 = Self::convert_account_to_ed25519(stored_entity.address.clone());
 
             debug::info!("Public key: {:?}", entity_pubkey_ed25519);
 
