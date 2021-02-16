@@ -69,14 +69,14 @@ decl_event!(
         ),
         FarmDeleted(u32),
 
-        NodeStored(u32, u32, types::Resources, types::Location, u32, u32),
+        NodeStored(u32, u32, types::Resources, types::Location, u32, u32, sp_core::ed25519::Public, AccountId),
         NodeDeleted(u32),
 
         EntityStored(u32, Vec<u8>, u32, u32, sp_core::ed25519::Public, AccountId),
         EntityUpdated(u32, Vec<u8>, u32, u32, AccountId),
         EntityDeleted(u32),
 
-        TwinStored(AccountId, sp_core::ed25519::Public, u32),
+        TwinStored(u32, sp_core::ed25519::Public, AccountId),
         TwinUpdated(u32),
 
         TwinEntityStored(u32, u32, Vec<u8>),
@@ -138,7 +138,8 @@ decl_module! {
 
             ensure!(!FarmsByNameID::contains_key(farm.name.clone()), Error::<T>::FarmExists);
 
-            let id = FarmID::get();
+            let mut id = FarmID::get();
+            id = id+1;
 
             let mut new_farm = farm.clone();
 
@@ -146,7 +147,7 @@ decl_module! {
 
             Farms::insert(id, &new_farm);
             FarmsByNameID::insert(new_farm.name.clone(), id);
-            FarmID::put(id + 1);
+            FarmID::put(id);
 
             Self::deposit_event(RawEvent::FarmStored(
                 id,
@@ -191,7 +192,8 @@ decl_module! {
 
             ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
 
-            let id = NodeID::get();
+            let mut id = NodeID::get();
+            id = id+1;
 
             let mut new_node = node.clone();
             new_node.id = id;
@@ -199,7 +201,7 @@ decl_module! {
             new_node.pub_key = Self::convert_account_to_ed25519(address);
 
             Nodes::<T>::insert(id, &new_node);
-            NodeID::put(id + 1);
+            NodeID::put(id);
 
             Self::deposit_event(RawEvent::NodeStored(
                 id,
@@ -207,7 +209,9 @@ decl_module! {
                 new_node.resources,
                 new_node.location,
                 new_node.country_id,
-                new_node.city_id
+                new_node.city_id,
+                new_node.pub_key,
+                new_node.address,
             ));
 
             Ok(())
@@ -237,7 +241,8 @@ decl_module! {
 
             ensure!(!EntitiesByPubkeyID::<T>::contains_key(&address), Error::<T>::EntityWithPubkeyExists);
 
-			let id = EntityID::get();
+			let mut id = EntityID::get();
+            id = id+1;
 
 			let ed25519_pubkey = Self::convert_account_to_ed25519(address.clone());
 
@@ -253,7 +258,7 @@ decl_module! {
             Entities::<T>::insert(&id, &entity);
             EntitiesByNameID::insert(&name, id);
             EntitiesByPubkeyID::<T>::insert(&address, id);
-            EntityID::put(id + 1);
+            EntityID::put(id);
 
             Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, ed25519_pubkey, address));
 
@@ -327,7 +332,8 @@ decl_module! {
 
 			let ed25519_pubkey = Self::convert_account_to_ed25519(address.clone());
 
-			let twin_id = TwinID::get();
+            let mut twin_id = TwinID::get();
+            twin_id = twin_id+1;
 
 			let twin = types::Twin::<T::AccountId> {
 				twin_id,
@@ -337,14 +343,14 @@ decl_module! {
 			};
 
             Twins::<T>::insert(&twin_id, &twin);
-            TwinID::put(twin_id + 1);
+            TwinID::put(twin_id);
 
             // add the twin id to this users map of twin ids
             let mut twins_by_pubkey = TwinsByPubkey::<T>::get(&address.clone());
             twins_by_pubkey.push(twin_id);
 			TwinsByPubkey::<T>::insert(&address.clone(), twins_by_pubkey);
 
-			Self::deposit_event(RawEvent::TwinStored(address, ed25519_pubkey, twin_id));
+			Self::deposit_event(RawEvent::TwinStored(twin_id, ed25519_pubkey, address));
 			
 			Ok(())
 		}
@@ -467,7 +473,8 @@ decl_module! {
 
             ensure!(!PricingPoliciesByNameID::contains_key(&name), Error::<T>::PricingPolicyExists);
 
-            let id = PricingPolicyID::get();
+            let mut id = PricingPolicyID::get();
+            id = id+1;
 
             let policy = types::PricingPolicy {
                 id,
@@ -480,7 +487,7 @@ decl_module! {
 
             PricingPolicies::insert(&id, &policy);
             PricingPoliciesByNameID::insert(&name, &id);
-            PricingPolicyID::put(id + 1);
+            PricingPolicyID::put(id);
 
             Self::deposit_event(RawEvent::PricingPolicyStored(name, id));
 
@@ -493,7 +500,8 @@ decl_module! {
 
             ensure!(!CertificationCodesByNameID::contains_key(&name), Error::<T>::CertificationCodeExists);
 
-            let id = CertificationCodeID::get();
+            let mut id = CertificationCodeID::get();
+            id = id+1;
 
             let certification_code = types::CertificationCodes{
                 id,
@@ -504,7 +512,7 @@ decl_module! {
 
             CertificationCodes::insert(&id, &certification_code);
             CertificationCodesByNameID::insert(&name, &id);
-            CertificationCodeID::put(id + 1);
+            CertificationCodeID::put(id);
 
             Self::deposit_event(RawEvent::CertificationCodeStored(name, id));
 
