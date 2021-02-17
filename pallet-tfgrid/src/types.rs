@@ -56,9 +56,9 @@ pub struct Twin<AccountId> {
     //substrate account id = public key (32 bytes)
     //also used by PAN network
     pub address: AccountId,
+    pub ip: Vec<u8>,
     //link to person's or companies who own this twin
-    pub entities: Vec<EntityProof>,
-    pub ip: Vec<u8>
+    pub entities: Vec<EntityProof>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
