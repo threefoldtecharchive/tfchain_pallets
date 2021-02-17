@@ -76,8 +76,8 @@ decl_event!(
         EntityUpdated(u32, Vec<u8>, u32, u32, AccountId),
         EntityDeleted(u32),
 
-        TwinStored(u32, AccountId),
-        TwinUpdated(u32),
+        TwinStored(u32, AccountId, Vec<u8>),
+        TwinUpdated(u32, AccountId, Vec<u8>),
 
         TwinEntityStored(u32, u32, Vec<u8>),
         TwinEntityRemoved(u32, u32),
@@ -323,7 +323,7 @@ decl_module! {
         }
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
-        pub fn create_twin(origin) -> dispatch::DispatchResult {
+        pub fn create_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
             let mut twin_id = TwinID::get();
@@ -332,7 +332,8 @@ decl_module! {
 			let twin = types::Twin::<T::AccountId> {
 				twin_id,
 				address: address.clone(),
-				entities: Vec::new(),
+                entities: Vec::new(),
+                ip: ip.clone(),
 			};
 
             Twins::<T>::insert(&twin_id, &twin);
@@ -343,7 +344,7 @@ decl_module! {
             twins_by_pubkey.push(twin_id);
 			TwinsByPubkey::<T>::insert(&address.clone(), twins_by_pubkey);
 
-			Self::deposit_event(RawEvent::TwinStored(twin_id, address));
+			Self::deposit_event(RawEvent::TwinStored(twin_id, address, ip));
 			
 			Ok(())
 		}

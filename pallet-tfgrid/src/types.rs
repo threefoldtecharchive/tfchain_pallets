@@ -58,6 +58,7 @@ pub struct Twin<AccountId> {
     pub address: AccountId,
     //link to person's or companies who own this twin
     pub entities: Vec<EntityProof>,
+    pub ip: Vec<u8>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]

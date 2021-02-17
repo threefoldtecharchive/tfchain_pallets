@@ -226,7 +226,8 @@ fn test_create_twin_works() {
 		let name = "foobar";
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 	});
 }
 
@@ -238,7 +239,8 @@ fn test_delete_twin_works() {
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
 
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 		assert_ok!(TemplateModule::delete_twin(Origin::signed(alice()), twin_id));
@@ -254,7 +256,8 @@ fn test_add_entity_to_twin() {
 		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 
 		// Bob creates an anonymous twin
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
 		let signature = "fada0e25b5d5a9aead7f12fa69fbf74ff98cfdf56bf0d1069e4447e52936c4342853e1584f3939786bc199fc4167a146120047d7fae2615ca560735e2d3ad50f";
@@ -274,7 +277,8 @@ fn test_add_entity_to_twin_fails_with_invalid_signature() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Add Alice as entity to bob's twin
 
@@ -298,7 +302,8 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Add Alice as entity to bob's twin
 
@@ -325,11 +330,11 @@ fn test_create_twin_double_works() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		// First time creating twin succeeds
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		// Second time creating twin succeeds
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 	});
 }
 
@@ -340,7 +345,8 @@ fn test_create_farm_works() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 
@@ -425,7 +431,8 @@ fn test_create_farm_with_same_name_fails() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 
@@ -458,7 +465,8 @@ fn create_node_works() {
 
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice())));
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 
