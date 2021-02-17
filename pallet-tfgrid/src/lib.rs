@@ -64,12 +64,11 @@ decl_event!(
             u32,
             u32,
             u32,
-            u32,
             types::CertificationType,
         ),
         FarmDeleted(u32),
 
-        NodeStored(u32, u32, types::Resources, types::Location, u32, u32, sp_core::ed25519::Public, AccountId),
+        NodeStored(u32, u32, types::Resources, types::Location, u32, u32, Vec<u8>, AccountId),
         NodeDeleted(u32),
 
         EntityStored(u32, Vec<u8>, u32, u32, AccountId),
@@ -99,7 +98,9 @@ decl_error! {
 
         FarmExists,
         FarmNotExists,
+        CannotCreateFarmWrongTwin,
         CannotDeleteFarm,
+        CannotDeleteFarmWrongTwin,
 
         EntityWithNameExists,
         EntityWithPubkeyExists,
@@ -131,12 +132,14 @@ decl_module! {
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn create_farm(origin, farm: types::Farm) -> dispatch::DispatchResult {
-            let _ = ensure_signed(origin)?;
-
-            ensure!(Entities::<T>::contains_key(farm.entity_id), Error::<T>::EntityNotExists);
-            ensure!(Twins::<T>::contains_key(farm.twin_id), Error::<T>::TwinNotExists);
+            let address = ensure_signed(origin)?;
 
             ensure!(!FarmsByNameID::contains_key(farm.name.clone()), Error::<T>::FarmExists);
+
+            ensure!(Twins::<T>::contains_key(farm.twin_id), Error::<T>::TwinNotExists);
+            
+            let twin = Twins::<T>::get(farm.twin_id);
+            ensure!(twin.address == address, Error::<T>::CannotCreateFarmWrongTwin);
 
             let mut id = FarmID::get();
             id = id+1;
@@ -152,7 +155,6 @@ decl_module! {
             Self::deposit_event(RawEvent::FarmStored(
                 id,
                 new_farm.name,
-                new_farm.entity_id,
                 new_farm.twin_id,
                 new_farm.pricing_policy_id,
                 new_farm.country_id,
@@ -165,15 +167,13 @@ decl_module! {
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn delete_farm(origin, id: u32) -> dispatch::DispatchResult {
-            let pub_key = ensure_signed(origin)?;
+            let address = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
             let stored_farm = Farms::get(id);
 
-            ensure!(Entities::<T>::contains_key(stored_farm.entity_id), Error::<T>::EntityNotExists);
-            let stored_entity = Entities::<T>::get(stored_farm.entity_id);
-
-            ensure!(stored_entity.address == pub_key, Error::<T>::CannotDeleteFarm);
+            let twin = Twins::<T>::get(stored_farm.twin_id);
+            ensure!(twin.address == address, Error::<T>::CannotDeleteFarmWrongTwin);
 
             // delete farm
             Farms::remove(id);
@@ -198,7 +198,6 @@ decl_module! {
             let mut new_node = node.clone();
             new_node.id = id;
             new_node.address = address.clone();
-            new_node.pub_key = Self::convert_account_to_ed25519(address);
 
             Nodes::<T>::insert(id, &new_node);
             NodeID::put(id);
@@ -347,6 +346,30 @@ decl_module! {
 			Self::deposit_event(RawEvent::TwinStored(twin_id, address, ip));
 			
 			Ok(())
+        }
+        
+        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+		pub fn update_twin(origin, twin_id: u32, ip: Vec<u8>) -> dispatch::DispatchResult {
+            let address = ensure_signed(origin)?;
+            
+            ensure!(TwinsByPubkey::<T>::contains_key(address.clone()), Error::<T>::TwinNotExists);
+            let twin_ids = TwinsByPubkey::<T>::get(address.clone());
+
+            match twin_ids.binary_search(&twin_id) {
+                Ok(_) => {
+                    let mut twin = Twins::<T>::get(&twin_id);
+                    // Make sure only the owner of this twin can update his twin
+                    ensure!(twin.address == address, Error::<T>::UnauthorizedToUpdateTwin);
+        
+                    twin.ip = ip.clone();
+        
+                    Twins::<T>::insert(&twin_id, &twin);
+        
+                    Self::deposit_event(RawEvent::TwinUpdated(twin_id, address, ip));
+                    Ok(())
+                },
+                Err(_) => Err(Error::<T>::TwinNotExists.into()),
+            }
 		}
 
         // Method for twins only

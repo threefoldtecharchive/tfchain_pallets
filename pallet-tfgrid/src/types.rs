@@ -7,7 +7,6 @@ use frame_support::traits::Vec;
 pub struct Farm {
     pub id: u32,
     pub name: Vec<u8>,
-    pub entity_id: u32,
     pub twin_id: u32,
     pub pricing_policy_id: u32,
     pub certification_type: CertificationType,
@@ -24,7 +23,7 @@ pub struct Node<AccountId> {
     pub country_id: u32,
     pub city_id: u32,
     //public key of parity
-    pub pub_key: sp_core::ed25519::Public,
+    pub pub_key: Vec<u8>,
     pub address: AccountId,
 }
 
@@ -36,7 +35,7 @@ pub struct Gateway<AccountId> {
     pub country_id: u32,
     pub city_id: u32,
     //public key of parity
-    pub pub_key: sp_core::ed25519::Public,
+    pub pub_key: Vec<u8>,
     pub address: AccountId,
 }
 

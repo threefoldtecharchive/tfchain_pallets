@@ -359,7 +359,6 @@ fn test_create_farm_works() {
 			country_id: 0,
 			city_id: 0,
 			certification_type: super::types::CertificationType::None,
-			entity_id: 1,
 			pricing_policy_id: 0,
 		};
 
@@ -368,31 +367,65 @@ fn test_create_farm_works() {
 }
 
 #[test]
-fn test_create_farm_with_invalid_entity_id_fails() {
-	ExternalityBuilder::build().execute_with(|| {		
-		let farm_name = "test_farm";
-		
+fn test_update_twin_works() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+
+		let mut ip = "some_ip";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
 		let twin_id = 1;
-		let entity_id = 654;
+		ip = "some_other_ip";
+		assert_ok!(TemplateModule::update_twin(Origin::signed(alice()), twin_id, ip.as_bytes().to_vec()));
+	});
+}
 
-		let farm = super::types::Farm{
-			id: 0,
-			name: farm_name.as_bytes().to_vec(),
-			twin_id,
-			entity_id,
-			country_id: 0,
-			city_id: 0,
-			certification_type: super::types::CertificationType::None,
-			pricing_policy_id: 0,
-		};
+#[test]
+fn test_update_twin_fails_if_signed_by_someone_else() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		// Create farm with invalid entity-id
+		let mut ip = "some_ip";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
+		let twin_id = 1;
+		ip = "some_other_ip";
 		assert_noop!(
-			TemplateModule::create_farm(Origin::signed(alice()), farm),
-			Error::<TestRuntime>::EntityNotExists
+			TemplateModule::update_twin(Origin::signed(bob()), twin_id, ip.as_bytes().to_vec()),
+			Error::<TestRuntime>::TwinNotExists
 		);
 	});
 }
+
+
+// #[test]
+// fn test_create_farm_with_invalid_entity_id_fails() {
+// 	ExternalityBuilder::build().execute_with(|| {		
+// 		let farm_name = "test_farm";
+		
+// 		let twin_id = 1;
+// 		let entity_id = 654;
+
+// 		let farm = super::types::Farm{
+// 			id: 0,
+// 			name: farm_name.as_bytes().to_vec(),
+// 			twin_id,
+// 			entity_id,
+// 			country_id: 0,
+// 			city_id: 0,
+// 			certification_type: super::types::CertificationType::None,
+// 			pricing_policy_id: 0,
+// 		};
+
+// 		// Create farm with invalid entity-id
+// 		assert_noop!(
+// 			TemplateModule::create_farm(Origin::signed(alice()), farm),
+// 			Error::<TestRuntime>::EntityNotExists
+// 		);
+// 	});
+// }
 
 #[test]
 fn test_create_farm_with_invalid_twin_id_fails() {
@@ -402,14 +435,12 @@ fn test_create_farm_with_invalid_twin_id_fails() {
 		let name = "foobar";
 		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 		
-		let entity_id = 1;
 		let twin_id = 5342433;
 
 		let farm = super::types::Farm{
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
-			entity_id,
 			country_id: 0,
 			city_id: 0,
 			certification_type: super::types::CertificationType::None,
@@ -442,7 +473,6 @@ fn test_create_farm_with_same_name_fails() {
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
-			entity_id: 1,
 			country_id: 0,
 			city_id: 0,
 			certification_type: super::types::CertificationType::None,
@@ -476,7 +506,6 @@ fn create_node_works() {
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
-			entity_id: 1,
 			country_id: 0,
 			city_id: 0,
 			certification_type: super::types::CertificationType::None,
@@ -506,7 +535,7 @@ fn create_node_works() {
 			city_id: 0,
 			country_id: 0,
 			address: alice(),
-			pub_key: sp_core::ed25519::Public::default()
+			pub_key: "some_node_id".as_bytes().to_vec()
 		};
 
 		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node));
