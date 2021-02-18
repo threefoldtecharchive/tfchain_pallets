@@ -25,6 +25,20 @@ pub struct Node<AccountId> {
     //public key of parity
     pub pub_key: Vec<u8>,
     pub address: AccountId,
+    // node type (node, gateway, ..)
+    pub role: Role
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
+pub enum Role {
+    Node,
+    Gateway,
+}
+
+impl Default for Role {
+    fn default() -> Role {
+        Role::Node
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]

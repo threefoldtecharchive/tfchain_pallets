@@ -69,7 +69,7 @@ decl_event!(
         ),
         FarmDeleted(u32),
 
-        NodeStored(u32, u32, types::Resources, types::Location, u32, u32, Vec<u8>, AccountId),
+        NodeStored(u32, u32, types::Resources, types::Location, u32, u32, Vec<u8>, AccountId, types::Role),
         NodeDeleted(u32),
 
         EntityStored(u32, Vec<u8>, u32, u32, AccountId),
@@ -215,6 +215,7 @@ decl_module! {
                 new_node.city_id,
                 new_node.pub_key,
                 new_node.address,
+                new_node.role
             ));
 
             Ok(())

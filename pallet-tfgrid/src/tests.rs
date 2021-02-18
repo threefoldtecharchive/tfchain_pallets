@@ -535,7 +535,8 @@ fn create_node_works() {
 			city_id: 0,
 			country_id: 0,
 			address: alice(),
-			pub_key: "some_node_id".as_bytes().to_vec()
+			pub_key: "some_node_id".as_bytes().to_vec(),
+			role: super::types::Role::Node,
 		};
 
 		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node));
@@ -589,7 +590,8 @@ fn create_node_with_same_pubke_fails() {
 			city_id: 0,
 			country_id: 0,
 			address: alice(),
-			pub_key: "some_node_id".as_bytes().to_vec()
+			pub_key: "some_node_id".as_bytes().to_vec(),
+			role: super::types::Role::Node,
 		};
 
 		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node.clone()));
