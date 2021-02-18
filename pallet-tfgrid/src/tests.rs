@@ -541,3 +541,62 @@ fn create_node_works() {
 		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node));
 	});
 }
+
+#[test]
+fn create_node_with_same_pubke_fails() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+
+		let ip = "10.2.3.3";
+		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
+		let twin_id = 1;
+
+		let farm_name = "test_farm";
+
+		let farm = super::types::Farm{
+			id: 0,
+			name: farm_name.as_bytes().to_vec(),
+			twin_id,
+			country_id: 0,
+			city_id: 0,
+			certification_type: super::types::CertificationType::None,
+			pricing_policy_id: 0,
+		};
+
+		assert_ok!(TemplateModule::create_farm(Origin::signed(alice()), farm));
+
+		// random location
+		let location = super::types::Location{
+			longitude: "12.233213231".as_bytes().to_vec(),
+			latitude: "32.323112123".as_bytes().to_vec()
+		};
+
+		let resources = super::types::Resources {
+			hru: 1,
+			sru: 1,
+			cru: 1,
+			mru: 1,
+		};
+
+		let node = super::types::Node {
+			id: 0,
+			farm_id: 1,
+			resources,
+			location,
+			city_id: 0,
+			country_id: 0,
+			address: alice(),
+			pub_key: "some_node_id".as_bytes().to_vec()
+		};
+
+		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node.clone()));
+
+		assert_noop!(
+			TemplateModule::create_node(Origin::signed(alice()), node),
+			Error::<TestRuntime>::NodeWithPubkeyExists
+		);
+	});
+}

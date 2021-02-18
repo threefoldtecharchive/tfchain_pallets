@@ -28,6 +28,7 @@ decl_storage! {
         pub FarmsByNameID get(fn farms_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
 
         pub Nodes get(fn nodes): map hasher(blake2_128_concat) u32 => types::Node<T::AccountId>;
+        pub NodesByPubkeyID get(fn nodes_by_pubkey_id): map hasher(blake2_128_concat) Vec<u8> => u32;
 
         pub Entities get(fn entities): map hasher(blake2_128_concat) u32 => types::Entity<T::AccountId>;
         pub EntitiesByPubkeyID get(fn entities_by_pubkey_id): map hasher(blake2_128_concat) T::AccountId => u32;
@@ -94,6 +95,7 @@ decl_error! {
 
         CannotCreateNode,
         NodeNotExists,
+        NodeWithPubkeyExists,
         CannotDeleteNode,
 
         FarmExists,
@@ -191,6 +193,7 @@ decl_module! {
             let address = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
+            ensure!(!NodesByPubkeyID::contains_key(node.pub_key.clone()), Error::<T>::NodeWithPubkeyExists);
 
             let mut id = NodeID::get();
             id = id+1;
@@ -201,6 +204,7 @@ decl_module! {
 
             Nodes::<T>::insert(id, &new_node);
             NodeID::put(id);
+            NodesByPubkeyID::insert(node.pub_key.clone(), id);
 
             Self::deposit_event(RawEvent::NodeStored(
                 id,
@@ -226,6 +230,7 @@ decl_module! {
             ensure!(stored_node.address == address, Error::<T>::NodeNotExists);
 
             Nodes::<T>::remove(id);
+            NodesByPubkeyID::remove(stored_node.pub_key.clone());
 
             Self::deposit_event(RawEvent::NodeDeleted(id));
 
