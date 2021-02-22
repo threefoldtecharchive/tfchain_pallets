@@ -5,6 +5,7 @@ use frame_support::traits::Vec;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Farm {
+    pub version: u32,
     pub id: u32,
     pub name: Vec<u8>,
     pub twin_id: u32,
@@ -16,6 +17,7 @@ pub struct Farm {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Node<AccountId> {
+    pub version: u32,
     pub id: u32,
     pub farm_id: u32,
     pub resources: Resources,
@@ -43,6 +45,7 @@ impl Default for Role {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Gateway<AccountId> {
+    pub version: u32,
     pub id: u32,
     pub farm_id: u32,
     pub location: Location,
@@ -55,7 +58,8 @@ pub struct Gateway<AccountId> {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Entity<AccountId> {
-    pub entity_id: u32,
+    pub version: u32,
+    pub id: u32,
     pub name: Vec<u8>,
     pub country_id: u32,
     pub city_id: u32,
@@ -65,7 +69,8 @@ pub struct Entity<AccountId> {
 //digital twin
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Twin<AccountId> {
-    pub twin_id: u32,
+    pub version: u32,
+    pub id: u32,
     //substrate account id = public key (32 bytes)
     //also used by PAN network
     pub address: AccountId,
@@ -97,6 +102,7 @@ pub struct Location {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct PricingPolicy {
+    pub version: u32,
     pub id: u32,
     pub name: Vec<u8>,
     pub currency: Vec<u8>,
@@ -107,6 +113,7 @@ pub struct PricingPolicy {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct CertificationCodes {
+    pub version: u32,
     pub id: u32,
     pub name: Vec<u8>,
     pub description: Vec<u8>,

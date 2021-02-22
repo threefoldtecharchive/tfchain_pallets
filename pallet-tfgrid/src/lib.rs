@@ -22,6 +22,9 @@ pub trait Trait: system::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
+// Version constant that referenced the struct version
+pub const TFGRID_VERSION: u32 = 1;
+
 decl_storage! {
     trait Store for Module<T: Trait> as TfgridModule {
         pub Farms get(fn farms): map hasher(blake2_128_concat) u32 => types::Farm;
@@ -60,6 +63,7 @@ decl_event!(
     {
         FarmStored(
             u32,
+            u32,
             Vec<u8>,
             u32,
             u32,
@@ -69,22 +73,22 @@ decl_event!(
         ),
         FarmDeleted(u32),
 
-        NodeStored(u32, u32, types::Resources, types::Location, u32, u32, Vec<u8>, AccountId, types::Role),
+        NodeStored(u32, u32, u32, types::Resources, types::Location, u32, u32, Vec<u8>, AccountId, types::Role),
         NodeDeleted(u32),
 
-        EntityStored(u32, Vec<u8>, u32, u32, AccountId),
+        EntityStored(u32, u32, Vec<u8>, u32, u32, AccountId),
         EntityUpdated(u32, Vec<u8>, u32, u32, AccountId),
         EntityDeleted(u32),
 
-        TwinStored(u32, AccountId, Vec<u8>),
+        TwinStored(u32, u32, AccountId, Vec<u8>),
         TwinUpdated(u32, AccountId, Vec<u8>),
 
         TwinEntityStored(u32, u32, Vec<u8>),
         TwinEntityRemoved(u32, u32),
         TwinDeleted(u32),
 
-        PricingPolicyStored(Vec<u8>, u32),
-        CertificationCodeStored(Vec<u8>, u32),
+        PricingPolicyStored(u32, Vec<u8>, u32),
+        CertificationCodeStored(u32, Vec<u8>, u32),
     }
 );
 
@@ -155,6 +159,7 @@ decl_module! {
             FarmID::put(id);
 
             Self::deposit_event(RawEvent::FarmStored(
+                TFGRID_VERSION,
                 id,
                 new_farm.name,
                 new_farm.twin_id,
@@ -207,6 +212,7 @@ decl_module! {
             NodesByPubkeyID::insert(node.pub_key.clone(), id);
 
             Self::deposit_event(RawEvent::NodeStored(
+                TFGRID_VERSION,
                 id,
                 new_node.farm_id,
                 new_node.resources,
@@ -250,7 +256,8 @@ decl_module! {
             id = id+1;
 
             let entity = types::Entity::<T::AccountId> {
-                entity_id: id,
+                version: TFGRID_VERSION,
+                id,
                 name: name.clone(),
                 country_id,
                 city_id,
@@ -262,7 +269,7 @@ decl_module! {
             EntitiesByPubkeyID::<T>::insert(&address, id);
             EntityID::put(id);
 
-            Self::deposit_event(RawEvent::EntityStored(id, name, country_id, city_id, address));
+            Self::deposit_event(RawEvent::EntityStored(TFGRID_VERSION, id, name, country_id, city_id, address));
 
             Ok(())
         }
@@ -280,7 +287,8 @@ decl_module! {
             ensure!(stored_entity.address == pub_key, Error::<T>::CannotUpdateEntity);
 
             let entity = types::Entity::<T::AccountId> {
-                entity_id: stored_entity_id,
+                version: TFGRID_VERSION,
+                id: stored_entity_id,
                 name: name.clone(),
                 country_id,
                 city_id,
@@ -335,7 +343,8 @@ decl_module! {
             twin_id = twin_id+1;
 
 			let twin = types::Twin::<T::AccountId> {
-				twin_id,
+                version: TFGRID_VERSION,
+				id: twin_id,
 				address: address.clone(),
                 entities: Vec::new(),
                 ip: ip.clone(),
@@ -349,7 +358,7 @@ decl_module! {
             twins_by_pubkey.push(twin_id);
 			TwinsByPubkey::<T>::insert(&address.clone(), twins_by_pubkey);
 
-			Self::deposit_event(RawEvent::TwinStored(twin_id, address, ip));
+			Self::deposit_event(RawEvent::TwinStored(TFGRID_VERSION, twin_id, address, ip));
 			
 			Ok(())
         }
@@ -500,6 +509,7 @@ decl_module! {
             id = id+1;
 
             let policy = types::PricingPolicy {
+                version: TFGRID_VERSION,
                 id,
                 name: name.clone(),
                 currency,
@@ -512,7 +522,7 @@ decl_module! {
             PricingPoliciesByNameID::insert(&name, &id);
             PricingPolicyID::put(id);
 
-            Self::deposit_event(RawEvent::PricingPolicyStored(name, id));
+            Self::deposit_event(RawEvent::PricingPolicyStored(TFGRID_VERSION, name, id));
 
             Ok(())
         }
@@ -527,6 +537,7 @@ decl_module! {
             id = id+1;
 
             let certification_code = types::CertificationCodes{
+                version: TFGRID_VERSION,
                 id,
                 name: name.clone(),
                 description,
@@ -537,7 +548,7 @@ decl_module! {
             CertificationCodesByNameID::insert(&name, &id);
             CertificationCodeID::put(id);
 
-            Self::deposit_event(RawEvent::CertificationCodeStored(name, id));
+            Self::deposit_event(RawEvent::CertificationCodeStored(TFGRID_VERSION, name, id));
 
             Ok(())
         }

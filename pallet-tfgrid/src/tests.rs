@@ -353,6 +353,7 @@ fn test_create_farm_works() {
 		let name = "test_farm";
 
 		let farm = super::types::Farm{
+			version: 1,
 			id: 0,
 			name: name.as_bytes().to_vec(),
 			twin_id,
@@ -438,6 +439,7 @@ fn test_create_farm_with_invalid_twin_id_fails() {
 		let twin_id = 5342433;
 
 		let farm = super::types::Farm{
+			version: 1,
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
@@ -470,6 +472,7 @@ fn test_create_farm_with_same_name_fails() {
 		let farm_name = "test_farm";
 
 		let farm = super::types::Farm{
+			version: 1,
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
@@ -503,6 +506,7 @@ fn create_node_works() {
 		let farm_name = "test_farm";
 
 		let farm = super::types::Farm{
+			version: 1,
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
@@ -528,6 +532,7 @@ fn create_node_works() {
 		};
 
 		let node = super::types::Node {
+			version: 1,
 			id: 0,
 			farm_id: 1,
 			resources,
@@ -558,6 +563,7 @@ fn create_node_with_same_pubke_fails() {
 		let farm_name = "test_farm";
 
 		let farm = super::types::Farm{
+			version: 1,
 			id: 0,
 			name: farm_name.as_bytes().to_vec(),
 			twin_id,
@@ -583,6 +589,7 @@ fn create_node_with_same_pubke_fails() {
 		};
 
 		let node = super::types::Node {
+			version: 1,
 			id: 0,
 			farm_id: 1,
 			resources,
