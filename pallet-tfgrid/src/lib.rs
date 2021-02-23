@@ -153,6 +153,7 @@ decl_module! {
             let mut new_farm = farm.clone();
 
             new_farm.id = id;
+            new_farm.version = TFGRID_VERSION;
 
             Farms::insert(id, &new_farm);
             FarmsByNameID::insert(new_farm.name.clone(), id);
@@ -206,6 +207,7 @@ decl_module! {
             let mut new_node = node.clone();
             new_node.id = id;
             new_node.address = address.clone();
+            new_node.version = TFGRID_VERSION;
 
             Nodes::<T>::insert(id, &new_node);
             NodeID::put(id);
@@ -416,8 +418,6 @@ decl_module! {
 
             let entity_pubkey_ed25519 = Self::convert_account_to_ed25519(stored_entity.address.clone());
 
-            debug::info!("Public key: {:?}", entity_pubkey_ed25519);
-
             // let entity_pubkey_sr25519 = sp_core::sr25519::Public::from_raw(bytes);
             // debug::info!("Public key: {:?}", entity_pubkey_sr25519);
 
@@ -426,20 +426,14 @@ decl_module! {
             message.extend_from_slice(&entity_id.to_be_bytes());
             message.extend_from_slice(&twin_id.to_be_bytes());
 
-            debug::info!("Message: {:?}", message);
-
             // Verify that the signature contains the message with the entity's public key
-            debug::info!("Checking signature");
             let ed25519_verified = sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519);
-            debug::info!("ed25519 verified? {:?}", ed25519_verified);
 
             // let sr25519_verified = sp_io::crypto::sr25519_verify(&sr25519_signature, &message, &entity_pubkey_sr25519);
             // let sr25519_verified = sr25519_signature.verify(message.as_slice(), &entity_pubkey_sr25519);
             // debug::info!("sr25519 verified? {:?}", sr25519_verified);
 
             ensure!(sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519), Error::<T>::EntitySignatureDoesNotMatch);
-
-            debug::info!("Signature is valid");
 
             // Store proof
             twin.entities.push(entity_proof);
