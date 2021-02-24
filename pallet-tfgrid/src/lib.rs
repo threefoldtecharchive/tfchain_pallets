@@ -4,7 +4,7 @@
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// https://substrate.dev/docs/en/knowledgebase/runtime/frame
 use frame_support::{
-    debug, decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
+    decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -247,12 +247,25 @@ decl_module! {
         }
 
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
-        pub fn create_entity(origin, name: Vec<u8>, country_id: u32, city_id: u32) -> dispatch::DispatchResult {
-            let address = ensure_signed(origin)?;
+        pub fn create_entity(origin, target: T::AccountId, name: Vec<u8>, country_id: u32, city_id: u32, signature: Vec<u8>) -> dispatch::DispatchResult {
+            let _ = ensure_signed(origin)?;
 
             ensure!(!EntitiesByNameID::contains_key(&name), Error::<T>::EntityWithNameExists);
+            ensure!(!EntitiesByPubkeyID::<T>::contains_key(&target), Error::<T>::EntityWithPubkeyExists);
 
-            ensure!(!EntitiesByPubkeyID::<T>::contains_key(&address), Error::<T>::EntityWithPubkeyExists);
+            let entity_pubkey_ed25519 = Self::convert_account_to_ed25519(target.clone());
+
+            let decoded_signature_as_byteslice = <[u8; 64]>::from_hex(signature.clone()).expect("Decoding failed");
+
+            // Decode signature into a ed25519 signature
+            let ed25519_signature = sp_core::ed25519::Signature::from_raw(decoded_signature_as_byteslice);
+
+            let mut message = vec![];
+            message.extend_from_slice(&name);
+            message.extend_from_slice(&country_id.to_be_bytes());
+            message.extend_from_slice(&city_id.to_be_bytes());
+
+            ensure!(sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519), Error::<T>::EntitySignatureDoesNotMatch);
 
 			let mut id = EntityID::get();
             id = id+1;
@@ -263,15 +276,15 @@ decl_module! {
                 name: name.clone(),
                 country_id,
                 city_id,
-                address: address.clone(),
+                address: target.clone(),
             };
 
             Entities::<T>::insert(&id, &entity);
             EntitiesByNameID::insert(&name, id);
-            EntitiesByPubkeyID::<T>::insert(&address, id);
+            EntitiesByPubkeyID::<T>::insert(&target, id);
             EntityID::put(id);
 
-            Self::deposit_event(RawEvent::EntityStored(TFGRID_VERSION, id, name, country_id, city_id, address));
+            Self::deposit_event(RawEvent::EntityStored(TFGRID_VERSION, id, name, country_id, city_id, target));
 
             Ok(())
         }
@@ -414,24 +427,13 @@ decl_module! {
 
             // Decode signature into a ed25519 signature
             let ed25519_signature = sp_core::ed25519::Signature::from_raw(decoded_signature_as_byteslice);
-            // let sr25519_signature = sp_core::sr25519::Signature::from_raw(decoded_signature_as_byteslice);
 
             let entity_pubkey_ed25519 = Self::convert_account_to_ed25519(stored_entity.address.clone());
-
-            // let entity_pubkey_sr25519 = sp_core::sr25519::Public::from_raw(bytes);
-            // debug::info!("Public key: {:?}", entity_pubkey_sr25519);
 
             let mut message = vec![];
 
             message.extend_from_slice(&entity_id.to_be_bytes());
             message.extend_from_slice(&twin_id.to_be_bytes());
-
-            // Verify that the signature contains the message with the entity's public key
-            let ed25519_verified = sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519);
-
-            // let sr25519_verified = sp_io::crypto::sr25519_verify(&sr25519_signature, &message, &entity_pubkey_sr25519);
-            // let sr25519_verified = sr25519_signature.verify(message.as_slice(), &entity_pubkey_sr25519);
-            // debug::info!("sr25519 verified? {:?}", sr25519_verified);
 
             ensure!(sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519), Error::<T>::EntitySignatureDoesNotMatch);
 

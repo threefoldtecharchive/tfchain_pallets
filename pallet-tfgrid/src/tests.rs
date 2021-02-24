@@ -17,6 +17,8 @@ use sp_runtime::{
 	MultiSignature,
 };
 
+use hex;
+
 pub type Signature = MultiSignature;
 
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
@@ -127,12 +129,43 @@ fn bob() -> AccountId {
 	get_account_id_from_seed::<sr25519::Public>("Bob")
 }
 
+fn sign_create_entity(name: Vec<u8>, country_id: u32, city_id: u32) -> Vec<u8> {
+	let seed = hex::decode("59336423ee7af732b2d4a76e440651e33e5ba51540e5633535b9030492c2a6f6").unwrap();
+	let pair = ed25519::Pair::from_seed_slice(&seed).unwrap();
+
+	let mut message = vec![];
+	message.extend_from_slice(&name);
+	message.extend_from_slice(&country_id.to_be_bytes());
+	message.extend_from_slice(&city_id.to_be_bytes());
+
+	let signature = pair.sign(&message);
+
+	// hex encode signature
+	hex::encode(signature.0.to_vec()).into()
+}
+
+fn sign_add_entity_to_twin(entity_id: u32, twin_id: u32) -> Vec<u8> {
+	let seed = hex::decode("59336423ee7af732b2d4a76e440651e33e5ba51540e5633535b9030492c2a6f6").unwrap();
+	let pair = ed25519::Pair::from_seed_slice(&seed).unwrap();
+
+	let mut message = vec![];
+	message.extend_from_slice(&entity_id.to_be_bytes());
+	message.extend_from_slice(&twin_id.to_be_bytes());
+
+	let signature = pair.sign(&message);
+
+	// hex encode signature
+	hex::encode(signature.0.to_vec()).into()
+}
+
 #[test]
 fn test_create_entity_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
 	});
 }
 
@@ -141,12 +174,14 @@ fn test_update_entity_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let mut name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
 
 		// Change name to barfoo
 		name = "barfoo";
 
-		assert_ok!(TemplateModule::update_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		assert_ok!(TemplateModule::update_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 	});
 }
 
@@ -155,8 +190,10 @@ fn test_update_entity_fails_if_signed_by_someone_else() {
 	ExternalityBuilder::build().execute_with(|| {
 		let mut name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
+		
 		// Change name to barfoo
 		name = "barfoo";
 
@@ -172,10 +209,12 @@ fn test_create_entity_double_fails() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		assert_noop!(
-			TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0),
+			TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature),
 			Error::<TestRuntime>::EntityWithNameExists
 		);
 	});
@@ -186,12 +225,16 @@ fn test_create_entity_double_fails_with_same_pubkey() {
 	ExternalityBuilder::build().execute_with(|| {
 		let mut name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		name = "barfoo";
 
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
 		assert_noop!(
-			TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0),
+			TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature),
 			Error::<TestRuntime>::EntityWithPubkeyExists
 		);
 	});
@@ -201,9 +244,12 @@ fn test_create_entity_double_fails_with_same_pubkey() {
 fn test_delete_entity_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
 
-		assert_ok!(TemplateModule::delete_entity(Origin::signed(alice())));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+
+		assert_ok!(TemplateModule::delete_entity(Origin::signed(test_ed25519())));
 	});
 }
 
@@ -211,7 +257,9 @@ fn test_delete_entity_works() {
 fn test_delete_entity_fails_if_signed_by_someone_else() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		assert_noop!(
 			TemplateModule::delete_entity(Origin::signed(bob())),
@@ -223,22 +271,14 @@ fn test_delete_entity_fails_if_signed_by_someone_else() {
 #[test]
 fn test_create_twin_works() {
 	ExternalityBuilder::build().execute_with(|| {
-		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
-
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::create_twin(Origin::signed(test_ed25519()), ip.as_bytes().to_vec()));
 	});
 }
 
 #[test]
 fn test_delete_twin_works() {
 	ExternalityBuilder::build().execute_with(|| {
-		let name = "foobar";
-
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
-
-
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
@@ -253,20 +293,22 @@ fn test_add_entity_to_twin() {
 		let name = "foobar";
 
 		// Someone first creates an entity
-		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		// Bob creates an anonymous twin
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
-		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
-		let signature = "fada0e25b5d5a9aead7f12fa69fbf74ff98cfdf56bf0d1069e4447e52936c4342853e1584f3939786bc199fc4167a146120047d7fae2615ca560735e2d3ad50f";
+		// Signature of the entityid (1) and twinid (1) signed with test_ed25519 account
+		let signature = sign_add_entity_to_twin(1, 1);
 		
 		let twin_id = 1;
 		let entity_id = 1;
 		
 		// Bob adds someone as entity to his twin
-		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.as_bytes().to_vec()));
+		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature));
 	});
 }
 
@@ -275,21 +317,24 @@ fn test_add_entity_to_twin_fails_with_invalid_signature() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Add Alice as entity to bob's twin
 
-		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
-		let signature = "12fa1dfb735dc528a8d38bc0003c90521ea313ff82e4d0b2c683283e0fbc05001af5fd106ccf938356b9679790c6e7c4c4235c3ce2d88c787a1768ddcb401d08";
+		// Signature of the entityid (1) and twinid (2) signed with test_ed25519 account
+		let signature = sign_add_entity_to_twin(1, 2);
 		
 		let twin_id = 1;
 		let entity_id = 1;
 		
 		assert_noop!(
-			TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.as_bytes().to_vec()),
+			TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature),
 			Error::<TestRuntime>::EntitySignatureDoesNotMatch
 		);
 	});
@@ -300,24 +345,26 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Add Alice as entity to bob's twin
 
-		// Signature of the entityid (0) and twinid (0) signed with test_ed25519 account
-		let signature = "fada0e25b5d5a9aead7f12fa69fbf74ff98cfdf56bf0d1069e4447e52936c4342853e1584f3939786bc199fc4167a146120047d7fae2615ca560735e2d3ad50f";
+		// Signature of the entityid (1) and twinid (1) signed with test_ed25519 account
+		let signature = sign_add_entity_to_twin(1, 1);
 		
 		let twin_id = 1;
 		let entity_id = 1;
 		
-		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.as_bytes().to_vec()));
-
+		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.clone()));
 		
 		assert_noop!(
-			TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.as_bytes().to_vec()),
+			TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature),
 			Error::<TestRuntime>::EntityWithSignatureAlreadyExists
 		);
 	});
@@ -326,10 +373,6 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 #[test]
 fn test_create_twin_double_works() {
 	ExternalityBuilder::build().execute_with(|| {
-		let name = "foobar";
-
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
-
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
@@ -343,7 +386,10 @@ fn test_create_farm_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
@@ -370,9 +416,6 @@ fn test_create_farm_works() {
 #[test]
 fn test_update_twin_works() {
 	ExternalityBuilder::build().execute_with(|| {
-		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
-
 		let mut ip = "some_ip";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
@@ -385,9 +428,6 @@ fn test_update_twin_works() {
 #[test]
 fn test_update_twin_fails_if_signed_by_someone_else() {
 	ExternalityBuilder::build().execute_with(|| {
-		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
-
 		let mut ip = "some_ip";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
@@ -434,7 +474,10 @@ fn test_create_farm_with_invalid_twin_id_fails() {
 		let farm_name = "test_farm";
 
 		let name = "foobar";
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 		
 		let twin_id = 5342433;
 
@@ -462,7 +505,10 @@ fn test_create_farm_with_same_name_fails() {
 	ExternalityBuilder::build().execute_with(|| {		
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
@@ -496,7 +542,10 @@ fn create_node_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
@@ -553,7 +602,10 @@ fn create_node_with_same_pubke_fails() {
 	ExternalityBuilder::build().execute_with(|| {
 		let name = "foobar";
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), name.as_bytes().to_vec(), 0,0));
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
 		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
