@@ -18,15 +18,15 @@ mod tests;
 
 mod types;
 
-pub trait Trait: system::Trait {
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+pub trait Config: system::Config {
+    type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
 // Version constant that referenced the struct version
 pub const TFGRID_VERSION: u32 = 1;
 
 decl_storage! {
-    trait Store for Module<T: Trait> as TfgridModule {
+    trait Store for Module<T: Config> as TfgridModule {
         pub Farms get(fn farms): map hasher(blake2_128_concat) u32 => types::Farm;
         pub FarmsByNameID get(fn farms_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
 
@@ -59,7 +59,7 @@ decl_storage! {
 decl_event!(
     pub enum Event<T>
     where
-        AccountId = <T as frame_system::Trait>::AccountId,
+        AccountId = <T as frame_system::Config>::AccountId,
     {
         FarmStored(
             u32,
@@ -93,7 +93,7 @@ decl_event!(
 );
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         NoneValue,
         StorageOverflow,
 
@@ -131,7 +131,7 @@ decl_error! {
 }
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
         type Error = Error<T>;
 
         fn deposit_event() = default;
@@ -551,7 +551,7 @@ decl_module! {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
     pub fn convert_account_to_ed25519(account: T::AccountId) -> sp_core::ed25519::Public {
         // Decode entity's public key
         let account_vec = &account.encode();

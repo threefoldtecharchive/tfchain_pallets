@@ -1,4 +1,4 @@
-use crate::{Error, Module, Trait};
+use crate::{Error, Module, Config};
 use frame_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 use frame_system as system;
 use sp_io::TestExternalities;
@@ -36,7 +36,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl system::Trait for TestRuntime {
+impl system::Config for TestRuntime {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -64,7 +64,7 @@ impl system::Trait for TestRuntime {
 	type SystemWeightInfo = ();
 }
 
-impl Trait for TestRuntime {
+impl Config for TestRuntime {
 	type Event = ();
 }
 
