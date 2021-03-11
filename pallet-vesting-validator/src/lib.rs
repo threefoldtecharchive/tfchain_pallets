@@ -1,12 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! A Pallet to demonstrate using currency imbalances
-//!
-//! WARNING: never use this code in production (for demonstration/teaching purposes only)
-//! it only checks for signed extrinsics to enable arbitrary minting/slashing!!!
-
 use frame_support::{
-	decl_event, decl_module, decl_storage, decl_error, ensure, debug,
+	decl_event, decl_module, decl_storage, decl_error, ensure,
 	traits::{Currency, ReservableCurrency, Vec},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
