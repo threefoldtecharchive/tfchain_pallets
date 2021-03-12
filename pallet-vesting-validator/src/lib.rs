@@ -9,9 +9,6 @@ use sp_runtime::{DispatchResult};
 use codec::{Decode, Encode};
 use sp_runtime::traits::SaturatedConversion;
 
-// balance type using reservable currency type
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
-
 pub trait Config: system::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
@@ -23,10 +20,9 @@ decl_event!(
 	pub enum Event<T>
 	where
 		AccountId = <T as system::Config>::AccountId,
-		Balance = BalanceOf<T>,
 	{
-		TransactionProposed(Vec<u8>, AccountId, Balance),
-		TransactionSignatureAdded(Vec<u8>, Vec<u8>),
+		TransactionProposed(Vec<u8>),
+		TransactionSignatureAdded(Vec<u8>, Vec<u8>, AccountId),
 		TransactionReady(Vec<u8>),
 		TransactionRemoved(Vec<u8>),
 		TransactionExpired(Vec<u8>),
@@ -41,15 +37,14 @@ decl_error! {
 		TransactionValidatorExists,
 		TransactionValidatorNotExists,
 		TransactionExists,
+		SimilarTransactionExists,
 		TransactionNotExists,
 		SignatureExists
 	}
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct StellarTransaction <BalanceOf, AccountId, BlockNumber>{
-	pub amount: BalanceOf,
-	pub target: AccountId,
+pub struct StellarTransaction <BlockNumber> {
 	pub block: BlockNumber,
 	pub signatures: Vec<Vec<u8>>
 }
@@ -58,10 +53,11 @@ decl_storage! {
 	trait Store for Module<T: Config> as TFTBridgeModule {
 		pub Validators get(fn validator_accounts): Vec<T::AccountId>;
 
-		pub Transactions get(fn transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<BalanceOf<T>, T::AccountId, T::BlockNumber>;
+		pub Transactions get(fn transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<T::BlockNumber>;
+		pub TransactionsByEscrow get(fn transactions_by_escrow): map hasher(blake2_128_concat) T::AccountId => Vec<u8>;
 		
-		pub ExpiredTransactions get(fn expired_transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<BalanceOf<T>, T::AccountId, T::BlockNumber>;
-		pub ExecutedTransactions get(fn executed_transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<BalanceOf<T>, T::AccountId, T::BlockNumber>;
+		pub ExpiredTransactions get(fn expired_transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<T::BlockNumber>;
+		pub ExecutedTransactions get(fn executed_transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<T::BlockNumber>;
 	}
 }
 
@@ -82,9 +78,9 @@ decl_module! {
 		}
 		
 		#[weight = 10_000]
-		fn propose_transaction(origin, transaction: Vec<u8>, target: T::AccountId, amount: BalanceOf<T>){
-            let validator = ensure_signed(origin)?;
-            Self::propose_stellar_transaction(validator, transaction, target, amount)?;
+		fn propose_transaction(origin, target: T::AccountId, transaction: Vec<u8>){
+            let _ = ensure_signed(origin)?;
+            Self::propose_stellar_transaction(target, transaction)?;
 		}
 
 		#[weight = 10_000]
@@ -110,6 +106,12 @@ decl_module! {
 				if current_block_u64 - tx_block_u64 >= 1000 {
 					// Remove tx from storage
 					Transactions::<T>::remove(tx_id.clone());
+					// search for the transaction in the transactions by escrow map and delete it there as well
+					for (key, tx) in TransactionsByEscrow::<T>::iter() {
+						if tx == tx_id {
+							TransactionsByEscrow::<T>::remove(key);
+						}
+					}
 					// Insert into expired transactions list
 					ExpiredTransactions::<T>::insert(tx_id.clone(), tx);
 					// Emit an expired event so validators can choose to retry
@@ -149,28 +151,25 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	pub fn propose_stellar_transaction(origin: T::AccountId, tx_id: Vec<u8>, target: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+	pub fn propose_stellar_transaction(target: T::AccountId, tx: Vec<u8>) -> DispatchResult {
 		// make sure we don't duplicate the transaction
-		ensure!(!Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionExists);
+		ensure!(!Transactions::<T>::contains_key(tx.clone()), Error::<T>::TransactionExists);
 		
-		let validators = Validators::<T>::get();
-		match validators.binary_search(&origin) {
-			Ok(_) => {
-				let now = <frame_system::Module<T>>::block_number();
-				let tx = StellarTransaction {
-					amount,
-					target: target.clone(),
-					block: now,
-					signatures: Vec::new()
-				};
-				Transactions::<T>::insert(tx_id.clone(), &tx);
+		// make sure there can only be one transaction for each escrow at a time
+		ensure!(!TransactionsByEscrow::<T>::contains_key(target.clone()), Error::<T>::SimilarTransactionExists);
+		
+		let now = <frame_system::Module<T>>::block_number();
+		let stellar_tx = StellarTransaction {
+			block: now,
+			signatures: Vec::new()
+		};
 
-				Self::deposit_event(RawEvent::TransactionProposed(tx_id, target, amount));
+		Transactions::<T>::insert(tx.clone(), &stellar_tx);
+		TransactionsByEscrow::<T>::insert(target, &tx);
 
-				Ok(())
-			},
-			Err(_) => Err(Error::<T>::ValidatorNotExists.into()),
-		}
+		Self::deposit_event(RawEvent::TransactionProposed(tx));
+
+		Ok(())
 	}
 
 	pub fn remove_stellar_transaction(origin: T::AccountId, tx_id: Vec<u8>) -> DispatchResult {
@@ -184,6 +183,13 @@ impl<T: Config> Module<T> {
 
 				// Store it as an executed transaction
 				ExecutedTransactions::<T>::insert(tx_id.clone(), &tx);
+
+				// search for the transaction in the transactions by escrow map and delete it there as well
+				for (key, tx) in TransactionsByEscrow::<T>::iter() {
+					if tx == tx_id {
+						TransactionsByEscrow::<T>::remove(key);
+					}
+				}
 
 				// Remove it from the current transactions list
 				Transactions::<T>::remove(tx_id.clone());
@@ -221,7 +227,7 @@ impl<T: Config> Module<T> {
 
  				Transactions::<T>::insert(tx_id.clone(), &tx);
 
-				Self::deposit_event(RawEvent::TransactionSignatureAdded(tx_id, signature));
+				Self::deposit_event(RawEvent::TransactionSignatureAdded(tx_id, signature, origin));
 
 				Ok(())
 			},
