@@ -2,7 +2,7 @@
 
 use frame_support::{
 	decl_event, decl_module, decl_storage, decl_error, ensure,
-	traits::{Currency, ReservableCurrency, Vec},
+	traits::{Vec},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_runtime::{DispatchResult};
@@ -11,9 +11,6 @@ use sp_runtime::traits::SaturatedConversion;
 
 pub trait Config: system::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
-
-	/// Currency type for this pallet.
-	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 }
 
 decl_event!(
@@ -50,7 +47,7 @@ pub struct StellarTransaction <BlockNumber> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Config> as TFTBridgeModule {
+	trait Store for Module<T: Config> as VestingValidatorModule {
 		pub Validators get(fn validator_accounts): Vec<T::AccountId>;
 
 		pub Transactions get(fn transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<T::BlockNumber>;
