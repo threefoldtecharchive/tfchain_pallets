@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-	decl_event, decl_module, decl_storage, decl_error, ensure,
+	decl_event, decl_module, decl_storage, decl_error, ensure, debug,
 	traits::{Vec},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -18,7 +18,7 @@ decl_event!(
 	where
 		AccountId = <T as system::Config>::AccountId,
 	{
-		TransactionProposed(Vec<u8>),
+		TransactionProposed(Vec<u8>, AccountId),
 		TransactionSignatureAdded(Vec<u8>, Vec<u8>, AccountId),
 		TransactionReady(Vec<u8>),
 		TransactionRemoved(Vec<u8>),
@@ -150,10 +150,10 @@ impl<T: Config> Module<T> {
 
 	pub fn propose_stellar_transaction(target: T::AccountId, tx: Vec<u8>) -> DispatchResult {
 		// make sure we don't duplicate the transaction
-		ensure!(!Transactions::<T>::contains_key(tx.clone()), Error::<T>::TransactionExists);
+		// ensure!(!Transactions::<T>::contains_key(tx.clone()), Error::<T>::TransactionExists);
 		
 		// make sure there can only be one transaction for each escrow at a time
-		ensure!(!TransactionsByEscrow::<T>::contains_key(target.clone()), Error::<T>::SimilarTransactionExists);
+		// ensure!(!TransactionsByEscrow::<T>::contains_key(target.clone()), Error::<T>::SimilarTransactionExists);
 		
 		let now = <frame_system::Module<T>>::block_number();
 		let stellar_tx = StellarTransaction {
@@ -162,9 +162,9 @@ impl<T: Config> Module<T> {
 		};
 
 		Transactions::<T>::insert(tx.clone(), &stellar_tx);
-		TransactionsByEscrow::<T>::insert(target, &tx);
+		TransactionsByEscrow::<T>::insert(&target, &tx);
 
-		Self::deposit_event(RawEvent::TransactionProposed(tx));
+		Self::deposit_event(RawEvent::TransactionProposed(tx, target));
 
 		Ok(())
 	}
@@ -213,6 +213,7 @@ impl<T: Config> Module<T> {
 
 				// add the signature
 				tx.signatures.push(signature.clone());
+				Transactions::<T>::insert(tx_id.clone(), &tx);
 
 				// if more then then the half of all validators
 				// submitted their signature we can emit an event that a transaction
@@ -221,8 +222,6 @@ impl<T: Config> Module<T> {
 					Self::deposit_event(RawEvent::TransactionReady(tx_id));
 					return Ok(())
 				}
-
- 				Transactions::<T>::insert(tx_id.clone(), &tx);
 
 				Self::deposit_event(RawEvent::TransactionSignatureAdded(tx_id, signature, origin));
 
