@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-	decl_event, decl_module, decl_storage, decl_error, ensure, debug,
+	decl_event, decl_module, decl_storage, decl_error, ensure,
 	traits::{Vec},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -150,10 +150,10 @@ impl<T: Config> Module<T> {
 
 	pub fn propose_stellar_transaction(target: T::AccountId, tx: Vec<u8>) -> DispatchResult {
 		// make sure we don't duplicate the transaction
-		// ensure!(!Transactions::<T>::contains_key(tx.clone()), Error::<T>::TransactionExists);
+		ensure!(!Transactions::<T>::contains_key(tx.clone()), Error::<T>::TransactionExists);
 		
 		// make sure there can only be one transaction for each escrow at a time
-		// ensure!(!TransactionsByEscrow::<T>::contains_key(target.clone()), Error::<T>::SimilarTransactionExists);
+		ensure!(!TransactionsByEscrow::<T>::contains_key(target.clone()), Error::<T>::SimilarTransactionExists);
 		
 		let now = <frame_system::Module<T>>::block_number();
 		let stellar_tx = StellarTransaction {
@@ -201,29 +201,26 @@ impl<T: Config> Module<T> {
 
 	pub fn add_sig_stellar_transaction(origin: T::AccountId, tx_id: Vec<u8>, signature: Vec<u8>) -> DispatchResult {
 		// make sure tx exists
-		ensure!(!Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionExists);
+		ensure!(Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionExists);
 		
 		let validators = Validators::<T>::get();
 		match validators.binary_search(&origin) {
 			Ok(_) => {				
 				let mut tx = Transactions::<T>::get(&tx_id.clone());
-				
 				// check if the signature already exists
 				ensure!(!tx.signatures.iter().any(|c| c == &signature), Error::<T>::SignatureExists);
-
-				// add the signature
-				tx.signatures.push(signature.clone());
-				Transactions::<T>::insert(tx_id.clone(), &tx);
 
 				// if more then then the half of all validators
 				// submitted their signature we can emit an event that a transaction
 				// is ready to be submitted to the stellar network
 				if tx.signatures.len() > validators.len() / 2 {
 					Self::deposit_event(RawEvent::TransactionReady(tx_id));
-					return Ok(())
+				} else {
+					// add the signature
+					tx.signatures.push(signature.clone());
+					Transactions::<T>::insert(tx_id.clone(), &tx);
+					Self::deposit_event(RawEvent::TransactionSignatureAdded(tx_id, signature, origin));
 				}
-
-				Self::deposit_event(RawEvent::TransactionSignatureAdded(tx_id, signature, origin));
 
 				Ok(())
 			},
