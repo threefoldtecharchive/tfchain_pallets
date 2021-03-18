@@ -89,7 +89,7 @@ decl_module! {
 		#[weight = 10_000]
 		fn remove_transaction(origin, transaction: Vec<u8>){
             let validator = ensure_signed(origin)?;
-            Self::remove_stellar_transaction(validator, transaction)?;
+            Self::set_stellar_transaction_executed(validator, transaction)?;
 		}
 
 		fn on_finalize(block: T::BlockNumber) {
@@ -169,9 +169,11 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn remove_stellar_transaction(origin: T::AccountId, tx_id: Vec<u8>) -> DispatchResult {
+	// This will remove the transaction and add it to the executed transactions list
+	pub fn set_stellar_transaction_executed(origin: T::AccountId, tx_id: Vec<u8>) -> DispatchResult {
 		// make sure we don't duplicate the transaction
-		ensure!(!Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionExists);
+		ensure!(Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionNotExists);
+
 		
 		let validators = Validators::<T>::get();
 		match validators.binary_search(&origin) {
