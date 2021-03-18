@@ -23,6 +23,7 @@ decl_event!(
 		TransactionReady(Vec<u8>),
 		TransactionRemoved(Vec<u8>),
 		TransactionExpired(Vec<u8>),
+		TransactionFailed(Vec<u8>),
 	}
 );
 
@@ -55,6 +56,7 @@ decl_storage! {
 		
 		pub ExpiredTransactions get(fn expired_transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<T::BlockNumber>;
 		pub ExecutedTransactions get(fn executed_transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<T::BlockNumber>;
+		pub FailedTransactions get(fn failed_transactions): map hasher(blake2_128_concat) Vec<u8> => StellarTransaction<T::BlockNumber>;
 	}
 }
 
@@ -90,6 +92,12 @@ decl_module! {
 		fn remove_transaction(origin, transaction: Vec<u8>){
             let validator = ensure_signed(origin)?;
             Self::set_stellar_transaction_executed(validator, transaction)?;
+		}
+
+		#[weight = 10_000]
+		fn report_failed_transaction(origin, transaction: Vec<u8>){
+            let validator = ensure_signed(origin)?;
+            Self::set_stellar_transaction_failed(validator, transaction)?;
 		}
 
 		fn on_finalize(block: T::BlockNumber) {
@@ -194,6 +202,37 @@ impl<T: Config> Module<T> {
 				Transactions::<T>::remove(tx_id.clone());
 
 				Self::deposit_event(RawEvent::TransactionRemoved(tx_id));
+
+				Ok(())
+			},
+			Err(_) => Err(Error::<T>::ValidatorNotExists.into()),
+		}
+	}
+
+	// This will remove the transaction and add it to the failed transactions list
+	pub fn set_stellar_transaction_failed(origin: T::AccountId, tx_id: Vec<u8>) -> DispatchResult {
+		// make sure we don't duplicate the transaction
+		ensure!(Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionNotExists);
+
+		let validators = Validators::<T>::get();
+		match validators.binary_search(&origin) {
+			Ok(_) => {
+				let tx = Transactions::<T>::get(tx_id.clone());
+
+				// Store it as a failed transaction
+				FailedTransactions::<T>::insert(tx_id.clone(), &tx);
+
+				// search for the transaction in the transactions by escrow map and delete it there as well
+				for (key, tx) in TransactionsByEscrow::<T>::iter() {
+					if tx == tx_id {
+						TransactionsByEscrow::<T>::remove(key);
+					}
+				}
+
+				// Remove it from the current transactions list
+				Transactions::<T>::remove(tx_id.clone());
+
+				Self::deposit_event(RawEvent::TransactionFailed(tx_id));
 
 				Ok(())
 			},
