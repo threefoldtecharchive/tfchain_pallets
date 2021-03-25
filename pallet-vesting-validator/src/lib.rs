@@ -23,7 +23,7 @@ decl_event!(
 		TransactionReady(Vec<u8>),
 		TransactionRemoved(Vec<u8>),
 		TransactionExpired(Vec<u8>),
-		TransactionFailed(Vec<u8>),
+		TransactionFailed(Vec<u8>, Vec<u8>),
 	}
 );
 
@@ -95,9 +95,9 @@ decl_module! {
 		}
 
 		#[weight = 10_000]
-		fn report_failed_transaction(origin, transaction: Vec<u8>){
+		fn report_failed_transaction(origin, transaction: Vec<u8>, reason: Vec<u8>){
             let validator = ensure_signed(origin)?;
-            Self::set_stellar_transaction_failed(validator, transaction)?;
+            Self::set_stellar_transaction_failed(validator, transaction, reason)?;
 		}
 
 		fn on_finalize(block: T::BlockNumber) {
@@ -210,7 +210,7 @@ impl<T: Config> Module<T> {
 	}
 
 	// This will remove the transaction and add it to the failed transactions list
-	pub fn set_stellar_transaction_failed(origin: T::AccountId, tx_id: Vec<u8>) -> DispatchResult {
+	pub fn set_stellar_transaction_failed(origin: T::AccountId, tx_id: Vec<u8>, reason: Vec<u8>) -> DispatchResult {
 		// make sure we don't duplicate the transaction
 		ensure!(Transactions::<T>::contains_key(tx_id.clone()), Error::<T>::TransactionNotExists);
 
@@ -232,7 +232,7 @@ impl<T: Config> Module<T> {
 				// Remove it from the current transactions list
 				Transactions::<T>::remove(tx_id.clone());
 
-				Self::deposit_event(RawEvent::TransactionFailed(tx_id));
+				Self::deposit_event(RawEvent::TransactionFailed(tx_id, reason));
 
 				Ok(())
 			},
