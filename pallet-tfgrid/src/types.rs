@@ -87,10 +87,10 @@ pub struct EntityProof {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug, Copy)]
 pub struct Resources {
-    pub hru: u32,
-    pub sru: u32,
-    pub cru: u32,
-    pub mru: u32,
+    pub hru: u64,
+    pub sru: u64,
+    pub cru: u64,
+    pub mru: u64,
 }
 
 // Store Location long and lat as string
