@@ -2,7 +2,7 @@
 authors = ['Threefoldtech <https://github.com/threefoldtech>']
 description = 'Substrate TF Grid DB pallet'
 edition = '2018'
-homepage = 'threefold.io'
+homepage = 'https://threefold.io'
 license = 'Apache'
 name = 'pallet-tfgrid'
 repository = 'https://github.com/threefoldtech/substrate-pallets'
