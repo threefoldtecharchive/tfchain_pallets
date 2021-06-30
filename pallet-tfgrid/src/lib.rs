@@ -31,7 +31,7 @@ decl_storage! {
         pub FarmsByNameID get(fn farms_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
 
         pub Nodes get(fn nodes): map hasher(blake2_128_concat) u32 => types::Node<T::AccountId>;
-        pub NodesByPubkeyID get(fn nodes_by_pubkey_id): map hasher(blake2_128_concat) Vec<u8> => u32;
+        pub NodesByPubkeyID get(fn nodes_by_pubkey_id): map hasher(blake2_128_concat)  T::AccountId => u32;
 
         pub Entities get(fn entities): map hasher(blake2_128_concat) u32 => types::Entity<T::AccountId>;
         pub EntitiesByPubkeyID get(fn entities_by_pubkey_id): map hasher(blake2_128_concat) T::AccountId => u32;
@@ -73,7 +73,8 @@ decl_event!(
         ),
         FarmDeleted(u32),
 
-        NodeStored(u32, u32, u32, types::Resources, types::Location, u32, u32, Vec<u8>, AccountId, types::Role),
+        NodeStored(u32, u32, u32, types::Resources, types::Location, u32, u32, AccountId, types::Role, u32, Option<types::PublicConfig>),
+        NodeUpdated(u32, u32, u32, types::Resources, types::Location, u32, u32, AccountId, types::Role, u32, Option<types::PublicConfig>),
         NodeDeleted(u32),
 
         EntityStored(u32, u32, Vec<u8>, u32, u32, AccountId),
@@ -101,6 +102,7 @@ decl_error! {
         NodeNotExists,
         NodeWithPubkeyExists,
         CannotDeleteNode,
+        NodeDeleteNotAuthorized,
 
         FarmExists,
         FarmNotExists,
@@ -194,12 +196,13 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 0]
         pub fn create_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
-            ensure!(!NodesByPubkeyID::contains_key(node.pub_key.clone()), Error::<T>::NodeWithPubkeyExists);
+            ensure!(!NodesByPubkeyID::<T>::contains_key(address.clone()), Error::<T>::NodeWithPubkeyExists);
+            ensure!(Twins::<T>::contains_key(node.twin_id), Error::<T>::TwinNotExists);
 
             let mut id = NodeID::get();
             id = id+1;
@@ -211,7 +214,7 @@ decl_module! {
 
             Nodes::<T>::insert(id, &new_node);
             NodeID::put(id);
-            NodesByPubkeyID::insert(node.pub_key.clone(), id);
+            NodesByPubkeyID::<T>::insert(address.clone(), id);
 
             Self::deposit_event(RawEvent::NodeStored(
                 TFGRID_VERSION,
@@ -221,9 +224,44 @@ decl_module! {
                 new_node.location,
                 new_node.country_id,
                 new_node.city_id,
-                new_node.pub_key,
-                new_node.address,
-                new_node.role
+                address,
+                new_node.role,
+                new_node.twin_id,
+                new_node.public_config
+            ));
+
+            Ok(())
+        }
+
+        #[weight = 0]
+        pub fn update_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
+            let address = ensure_signed(origin)?;
+
+            ensure!(Nodes::<T>::contains_key(node.id), Error::<T>::NodeNotExists);
+            ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
+            ensure!(NodesByPubkeyID::<T>::contains_key(address.clone()), Error::<T>::NodeNotExists);
+            ensure!(Twins::<T>::contains_key(node.twin_id), Error::<T>::TwinNotExists);
+
+            let stored_node = Nodes::<T>::get(node.id);
+            ensure!(stored_node.address == address, Error::<T>::NodeNotExists);
+
+            let mut new_node = node.clone();
+            new_node.address = address.clone();
+            // override node in storage
+            Nodes::<T>::insert(stored_node.id, &new_node);
+
+            Self::deposit_event(RawEvent::NodeUpdated(
+                node.version,
+                node.id,
+                node.farm_id,
+                node.resources,
+                node.location,
+                node.country_id,
+                node.city_id,
+                address,
+                node.role,
+                node.twin_id,
+                node.public_config
             ));
 
             Ok(())
@@ -236,10 +274,10 @@ decl_module! {
             ensure!(Nodes::<T>::contains_key(id), Error::<T>::NodeNotExists);
 
             let stored_node = Nodes::<T>::get(id);
-            ensure!(stored_node.address == address, Error::<T>::NodeNotExists);
+            ensure!(stored_node.address == address, Error::<T>::NodeDeleteNotAuthorized);
 
             Nodes::<T>::remove(id);
-            NodesByPubkeyID::remove(stored_node.pub_key.clone());
+            NodesByPubkeyID::<T>::remove(address.clone());
 
             Self::deposit_event(RawEvent::NodeDeleted(id));
 

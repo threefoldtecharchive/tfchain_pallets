@@ -20,15 +20,24 @@ pub struct Node<AccountId> {
     pub version: u32,
     pub id: u32,
     pub farm_id: u32,
+    pub twin_id: u32,
     pub resources: Resources,
     pub location: Location,
     pub country_id: u32,
     pub city_id: u32,
-    //public key of parity
-    pub pub_key: Vec<u8>,
     pub address: AccountId,
     // node type (node, gateway, ..)
-    pub role: Role
+    pub role: Role,
+    // optional public config
+    pub public_config: Option<PublicConfig>
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct PublicConfig {
+    pub ipv4: Vec<u8>,
+    pub ipv6: Vec<u8>,
+    pub gw4: Vec<u8>,
+    pub gw6: Vec<u8>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
@@ -51,7 +60,6 @@ pub struct Gateway<AccountId> {
     pub location: Location,
     pub country_id: u32,
     pub city_id: u32,
-    //public key of parity
     pub pub_key: Vec<u8>,
     pub address: AccountId,
 }
