@@ -29,7 +29,8 @@ json
 ```
 contract {
     "workload": "encrypted_workload_data",
-    "node_id": "some_node_address"
+    "node_id": "some_node_address",
+    "public_ips": NumberOfPublicIPS
 }
 ```
 
