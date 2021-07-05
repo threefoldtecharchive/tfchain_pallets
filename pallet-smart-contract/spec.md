@@ -1,17 +1,5 @@
 # Smart Contract for IT on the blockchain
 
-## Overview
-
-The current smart contract 4 IT on the Threefold Grid is centralized. It is owned by the *explorer* and all it's data sits in a MongoDB. We want to decentralize the way a User and a Farmer aggree on what needs to be deployed on their nodes.
-
-## Current architecture
-
-The TFexplorer is responsible for deploying, decomissioning, refunding, .. of workloads. It is the intermediate party between the User and the Farmer on the Threefold Grid. For more details on the workings of the current model: https://manual2.threefold.io/#/smartcontract_details
-
-The issue with this architecture is that there is a single point of failure. In this case it can be the machines where the explorers are running on.
-
-We, as a company, also promote decentralization in any way possible. The very way we run this critical component centralized is contradictionary.
-
 ## Proposed architecture
 
 Two main components will play a role in achieving a decentralised consensus between a user and a farmer.
