@@ -19,7 +19,8 @@ pub struct Farm {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct PublicIP {
     pub ip: Vec<u8>,
-    pub workload_id: u32,
+    pub gateway: Vec<u8>,
+    pub contract_id: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
