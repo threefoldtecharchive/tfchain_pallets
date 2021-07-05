@@ -13,6 +13,13 @@ pub struct Farm {
     pub certification_type: CertificationType,
     pub country_id: u32,
     pub city_id: u32,
+    pub public_ips: Vec<PublicIP>
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct PublicIP {
+    pub ip: Vec<u8>,
+    pub workload_id: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]

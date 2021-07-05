@@ -38,7 +38,7 @@ decl_storage! {
         pub EntitiesByNameID get(fn entities_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
 
         pub Twins get(fn twins): map hasher(blake2_128_concat) u32 => types::Twin<T::AccountId>;
-        pub TwinsByPubkey get(fn twin_ids_by_pubkey): map hasher(blake2_128_concat) T::AccountId => Vec<u32>;
+        pub TwinsByPubkeyID get(fn twin_ids_by_pubkey): map hasher(blake2_128_concat) T::AccountId => u32;
 
         pub PricingPolicies get(fn pricing_policies): map hasher(blake2_128_concat) u32 => types::PricingPolicy;
         pub PricingPoliciesByNameID get(fn pricing_policies_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
@@ -196,7 +196,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 0]
+        #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn create_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -233,7 +233,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 0]
+        #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn update_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -298,7 +298,7 @@ decl_module! {
             // Decode signature into a ed25519 signature
             let ed25519_signature = sp_core::ed25519::Signature::from_raw(decoded_signature_as_byteslice);
 
-            let mut message = vec![];
+            let mut message = Vec::new();
             message.extend_from_slice(&name);
             message.extend_from_slice(&country_id.to_be_bytes());
             message.extend_from_slice(&city_id.to_be_bytes());
@@ -407,9 +407,7 @@ decl_module! {
             TwinID::put(twin_id);
 
             // add the twin id to this users map of twin ids
-            let mut twins_by_pubkey = TwinsByPubkey::<T>::get(&address.clone());
-            twins_by_pubkey.push(twin_id);
-			TwinsByPubkey::<T>::insert(&address.clone(), twins_by_pubkey);
+			TwinsByPubkeyID::<T>::insert(&address.clone(), twin_id);
 
 			Self::deposit_event(RawEvent::TwinStored(TFGRID_VERSION, twin_id, address, ip));
 			
@@ -420,24 +418,19 @@ decl_module! {
 		pub fn update_twin(origin, twin_id: u32, ip: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
             
-            ensure!(TwinsByPubkey::<T>::contains_key(address.clone()), Error::<T>::TwinNotExists);
-            let twin_ids = TwinsByPubkey::<T>::get(address.clone());
+            ensure!(TwinsByPubkeyID::<T>::contains_key(address.clone()), Error::<T>::TwinNotExists);
+            let twin_id = TwinsByPubkeyID::<T>::get(address.clone());
+            let mut twin = Twins::<T>::get(&twin_id);
 
-            match twin_ids.binary_search(&twin_id) {
-                Ok(_) => {
-                    let mut twin = Twins::<T>::get(&twin_id);
-                    // Make sure only the owner of this twin can update his twin
-                    ensure!(twin.address == address, Error::<T>::UnauthorizedToUpdateTwin);
-        
-                    twin.ip = ip.clone();
-        
-                    Twins::<T>::insert(&twin_id, &twin);
-        
-                    Self::deposit_event(RawEvent::TwinUpdated(twin_id, address, ip));
-                    Ok(())
-                },
-                Err(_) => Err(Error::<T>::TwinNotExists.into()),
-            }
+            // Make sure only the owner of this twin can update his twin
+            ensure!(twin.address == address, Error::<T>::UnauthorizedToUpdateTwin);
+
+            twin.ip = ip.clone();
+
+            Twins::<T>::insert(&twin_id, &twin);
+
+            Self::deposit_event(RawEvent::TwinUpdated(twin_id, address, ip));
+            Ok(())
 		}
 
         // Method for twins only
@@ -468,7 +461,7 @@ decl_module! {
 
             let entity_pubkey_ed25519 = Self::convert_account_to_ed25519(stored_entity.address.clone());
 
-            let mut message = vec![];
+            let mut message = Vec::new();
 
             message.extend_from_slice(&entity_id.to_be_bytes());
             message.extend_from_slice(&twin_id.to_be_bytes());
@@ -522,11 +515,7 @@ decl_module! {
             Twins::<T>::remove(&twin_id);
 
             // remove twin id from this users map of twin ids
-            let mut twins_by_pubkey = TwinsByPubkey::<T>::get(&pub_key.clone());
-            if let Some(pos) = twins_by_pubkey.iter().position(|x| *x == twin_id) {
-                twins_by_pubkey.remove(pos);
-                TwinsByPubkey::<T>::insert(&pub_key.clone(), twins_by_pubkey);
-            }
+            TwinsByPubkeyID::<T>::remove(&pub_key.clone());
 
             Self::deposit_event(RawEvent::TwinDeleted(twin_id));
 
