@@ -415,7 +415,7 @@ decl_module! {
         }
         
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn update_twin(origin, twin_id: u32, ip: Vec<u8>) -> dispatch::DispatchResult {
+		pub fn update_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
             
             ensure!(TwinsByPubkeyID::<T>::contains_key(address.clone()), Error::<T>::TwinNotExists);
