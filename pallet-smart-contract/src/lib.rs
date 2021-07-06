@@ -3,26 +3,35 @@
 use frame_support::{
 	decl_event, decl_module, decl_storage, decl_error, ensure, debug,
 	traits::{Vec},
+	traits::{Currency, ExistenceRequirement::AllowDeath},
 };
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{DispatchResult};
+use sp_runtime::{
+	DispatchResult, DispatchError,
+	traits::SaturatedConversion,
+};
 use codec::{Decode, Encode};
 use pallet_tfgrid;
+use pallet_timestamp as timestamp;
 
-pub trait Config: system::Config + pallet_tfgrid::Config {
+pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+	type Currency: Currency<Self::AccountId>;
 }
+
+pub type BalanceOf<T> =
+    <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
 
 decl_event!(
 	pub enum Event<T>
     where
         AccountId = <T as frame_system::Config>::AccountId,
     {
-		ContractCreated(u128, u32, Vec<u8>, u32, AccountId),
-		IPsReserved(u128, Vec<Vec<u8>>),
-		ContractCanceled(u128),
-		IPsFreed(u128, Vec<Vec<u8>>),
-		ContractDeployed(u128, AccountId),
+		ContractCreated(u64, u32, Vec<u8>, u32, AccountId),
+		IPsReserved(u64, Vec<Vec<u8>>),
+		ContractCanceled(u64),
+		IPsFreed(u64, Vec<Vec<u8>>),
+		ContractDeployed(u64, AccountId),
 	}
 );
 
@@ -40,6 +49,8 @@ decl_error! {
 		TwinNotAuthorizedToCreateContract,
 		TwinNotAuthorizedToCancelContract,
 		NodeNotAuthorizedToDeployContract,
+		NodeNotAuthorizedToComputeReport,
+		PricingPolicyNotExists
 	}
 }
 
@@ -49,7 +60,8 @@ pub struct Contract<AccountId> {
 	node_id: AccountId,
     workload: Vec<u8>,
     public_ips: u32,
-	state: ContractState
+	state: ContractState,
+	last_updated: u64,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
@@ -64,10 +76,20 @@ impl Default for ContractState {
 	}
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct Consumption {
+	contract_id: u64,
+	cru: u64,
+	sru: u64,
+	hru: u64,
+	mru: u64,
+	nru: u64
+}
+
 decl_storage! {
 	trait Store for Module<T: Config> as c {
-        pub Contracts get(fn contracts): map hasher(blake2_128_concat) u128 => Contract<T::AccountId>;
-        ContractID: u128;
+        pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => Contract<T::AccountId>;
+        ContractID: u64;
 	}
 }
 
@@ -82,15 +104,21 @@ decl_module! {
 		}
 
 		#[weight = 10_000]
-		fn cancel_contract(origin, contract_id: u128){
+		fn cancel_contract(origin, contract_id: u64){
             let address = ensure_signed(origin)?;
             Self::_cancel_contract(address, contract_id)?;
 		}
 
 		#[weight = 10_000]
-		fn deploy_contract(origin, contract_id: u128) {
+		fn deploy_contract(origin, contract_id: u64) {
 			let address = ensure_signed(origin)?;
 			Self::_deploy_contract(address, contract_id)?;
+		}
+
+		#[weight = 10_000]
+		fn add_reports(origin, reports: Vec<Consumption>) {
+			let address = ensure_signed(origin)?;
+			Self::_compute_reports(address, reports)?;
 		}
 
 		// fn on_finalize(block: T::BlockNumber) {
@@ -122,7 +150,7 @@ impl<T: Config> Module<T> {
         Ok(())
 	}
 
-	pub fn _cancel_contract(address: T::AccountId, contract_id: u128) -> DispatchResult {
+	pub fn _cancel_contract(address: T::AccountId, contract_id: u64) -> DispatchResult {
 		ensure!(Contracts::<T>::contains_key(contract_id), Error::<T>::ContractNotExists);
 
 		let contract = Contracts::<T>::get(contract_id);
@@ -141,7 +169,7 @@ impl<T: Config> Module<T> {
         Ok(())
 	}
 
-	pub fn _deploy_contract(address: T::AccountId, contract_id: u128) -> DispatchResult {
+	pub fn _deploy_contract(address: T::AccountId, contract_id: u64) -> DispatchResult {
 		ensure!(Contracts::<T>::contains_key(contract_id), Error::<T>::ContractNotExists);
 
 		let mut contract = Contracts::<T>::get(contract_id);
@@ -151,6 +179,7 @@ impl<T: Config> Module<T> {
 		ensure!(node.address == address, Error::<T>::NodeNotAuthorizedToDeployContract);
 
 		contract.state = ContractState::Deployed;
+		contract.last_updated = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
         Contracts::<T>::insert(contract_id, &contract);
 
 		Self::deposit_event(RawEvent::ContractDeployed(contract_id, address));
@@ -158,7 +187,69 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn _reserve_ip(node_id: T::AccountId, number_of_ips_to_reserve: &u32, contract_id: u128) -> DispatchResult {
+	pub fn _compute_reports(source: T::AccountId, reports: Vec<Consumption>) -> DispatchResult {
+		for report in reports {
+			ensure!(Contracts::<T>::contains_key(report.contract_id), Error::<T>::ContractNotExists);
+			let mut contract = Contracts::<T>::get(report.contract_id);
+			ensure!(contract.node_id == source, Error::<T>::NodeNotAuthorizedToComputeReport);
+			
+			let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&contract.node_id);
+			let node = pallet_tfgrid::Nodes::<T>::get(node_id);
+			ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
+			let farm = pallet_tfgrid::Farms::get(node.farm_id);
+
+			ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
+			let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
+
+			let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+			let seconds_elapsed = now - contract.last_updated;
+
+			let su_used = report.hru / 1200 + report.sru / 300;
+			let su_cost = pricing_policy.su as u64 * seconds_elapsed * su_used;
+
+			let cu_used = report.mru / 4 + report.cru / 2;
+			let cu_cost = pricing_policy.cu as u64 * seconds_elapsed * cu_used;
+
+			let nu_cost = pricing_policy.nu as u64 * seconds_elapsed * report.nru;
+
+			// save total
+			let total = su_cost + cu_cost + nu_cost;
+
+			// get the contracts free balance
+			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+			let balance: BalanceOf<T> = T::Currency::free_balance(&twin.address);
+			
+			let mut decomission = false;
+			let balances_as_u128: u128 = balance.saturated_into::<u128>();
+			// if the total amount due exceeds to the balance decomission contract
+			// but first drain the account
+			if total as u128 >= balances_as_u128 {
+				decomission = true;				
+			}
+
+			// convert amount due from u128 to balance object
+			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(balances_as_u128);
+
+			// fetch farmer twin
+			let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
+			debug::info!("Transfering: {:?} from contract {:?} to farmer {:?}", &amount_due, &twin.address, &farmer_twin.address);
+            // Transfer currency to the farmers account
+            T::Currency::transfer(&twin.address, &farmer_twin.address, amount_due, AllowDeath)
+                .map_err(|_| DispatchError::Other("Can't make transfer"))?;
+
+			if decomission {
+				Contracts::<T>::remove(report.contract_id);
+			} else {
+				// update contract
+				contract.last_updated = now;
+				Contracts::<T>::insert(report.contract_id, &contract);
+			}
+		}
+
+		Ok(())
+	}
+
+	pub fn _reserve_ip(node_id: T::AccountId, number_of_ips_to_reserve: &u32, contract_id: u64) -> DispatchResult {
 		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&node_id);
 		let node = pallet_tfgrid::Nodes::<T>::get(node_id);
 
@@ -197,7 +288,7 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn _free_ip(node_id: T::AccountId, contract_id: u128)  -> DispatchResult {
+	pub fn _free_ip(node_id: T::AccountId, contract_id: u64)  -> DispatchResult {
 		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&node_id);
 		let node = pallet_tfgrid::Nodes::<T>::get(node_id);
 
