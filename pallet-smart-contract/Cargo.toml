@@ -28,6 +28,8 @@ path = "../pallet-tfgrid"
 [dependencies]
 # Substrate packages
 
+substrate-fixed = { git = 'https://github.com/encointer/substrate-fixed.git', rev = "b33d186888c60f38adafcfc0ec3a21aab263aef1" }
+
 balances = { package = 'pallet-balances', version = '3.0.0', default-features = false }
 frame-support = { version = '3.0.0', default-features = false }
 frame-system = { version = '3.0.0', default-features = false }

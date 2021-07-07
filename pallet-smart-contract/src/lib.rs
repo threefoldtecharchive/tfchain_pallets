@@ -13,7 +13,8 @@ use sp_runtime::{
 use codec::{Decode, Encode};
 use pallet_tfgrid;
 use pallet_timestamp as timestamp;
-use sp_std::cmp;
+
+use substrate_fixed::types::{U64F64};
 
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
@@ -209,23 +210,33 @@ impl<T: Config> Module<T> {
 			let seconds_elapsed = now - contract.last_updated;
 			debug::info!("seconds elapsed: {:?}", seconds_elapsed);
 
-			let su_used = report.hru / 1200 + report.sru / 300;
-			let su_cost = pricing_policy.su as u64 * seconds_elapsed * su_used;
+			let su_used = U64F64::from_num(report.hru) / 1200 + U64F64::from_num(report.sru) / 300;
+			let su_cost = U64F64::from_num(pricing_policy.su) * U64F64::from_num(seconds_elapsed) * su_used;
 			debug::info!("su cost: {:?}", su_cost);
 
-			let cu_used = cmp::min(report.mru / 4, report.cru / 2);
-			let cu_cost = pricing_policy.cu as u64 * seconds_elapsed * cu_used;
+			let mru_used = U64F64::from_num(report.mru) / 4;
+			let cru_used = U64F64::from_num(report.cru) / 2;
+			let min = if mru_used < cru_used {
+				mru_used
+			} else {
+				cru_used
+			};
+			let cu_cost = U64F64::from_num(pricing_policy.cu) * U64F64::from_num(seconds_elapsed) * min;
 			debug::info!("cu cost: {:?}", cu_cost);
 
+			let mut nu_cost = 0;
 			let mut used_nru = report.nru;
-			if contract.previous_nu_reported > 0 {
+			if used_nru > contract.previous_nu_reported {
+				// calculate used nru by subtracting previous reported units minus what is reported now
+				// this is because nru is in a counter that increases only
 				used_nru -= contract.previous_nu_reported;
+				// calculate the cost for nru based on the used nru
+				nu_cost = pricing_policy.nu as u64 * seconds_elapsed * used_nru;
 			}
-			let nu_cost = pricing_policy.nu as u64 * seconds_elapsed * used_nru;
 			debug::info!("nu cost: {:?}", nu_cost);
 
 			// save total
-			let total = su_cost + cu_cost + nu_cost;
+			let total = su_cost.ceil().to_num::<u64>() + cu_cost.ceil().to_num::<u64>() + nu_cost;
 			debug::info!("total cost: {:?}", total);
 
 			// get the contracts free balance
@@ -253,7 +264,9 @@ impl<T: Config> Module<T> {
                 .map_err(|_| DispatchError::Other("Can't make transfer"))?;
 
 			if decomission {
-				Self::_free_ip(node.address, report.contract_id)?;
+				if contract.public_ips > 0 {
+					Self::_free_ip(node.address, report.contract_id)?;
+				}
 				Contracts::<T>::remove(report.contract_id);
 			} else {
 				// update contract
