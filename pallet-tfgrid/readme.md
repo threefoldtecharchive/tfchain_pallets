@@ -9,3 +9,7 @@ Pallet for tfgrid database functionality.
 ## Testing
 
 `cargo test`
+
+## Diagram
+
+[alt](./diagram.png)
