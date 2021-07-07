@@ -13,6 +13,7 @@ use sp_runtime::{
 use codec::{Decode, Encode};
 use pallet_tfgrid;
 use pallet_timestamp as timestamp;
+use sp_std::cmp;
 
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
@@ -62,6 +63,7 @@ pub struct Contract<AccountId> {
     public_ips: u32,
 	state: ContractState,
 	last_updated: u64,
+	previous_nu_reported: u64,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
@@ -188,6 +190,8 @@ impl<T: Config> Module<T> {
 	}
 
 	pub fn _compute_reports(source: T::AccountId, reports: Vec<Consumption>) -> DispatchResult {
+		debug::info!("computing reports: {:?}", reports);
+
 		for report in reports {
 			ensure!(Contracts::<T>::contains_key(report.contract_id), Error::<T>::ContractNotExists);
 			let mut contract = Contracts::<T>::get(report.contract_id);
@@ -203,21 +207,31 @@ impl<T: Config> Module<T> {
 
 			let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 			let seconds_elapsed = now - contract.last_updated;
+			debug::info!("seconds elapsed: {:?}", seconds_elapsed);
 
 			let su_used = report.hru / 1200 + report.sru / 300;
 			let su_cost = pricing_policy.su as u64 * seconds_elapsed * su_used;
+			debug::info!("su cost: {:?}", su_cost);
 
-			let cu_used = report.mru / 4 + report.cru / 2;
+			let cu_used = cmp::min(report.mru / 4, report.cru / 2);
 			let cu_cost = pricing_policy.cu as u64 * seconds_elapsed * cu_used;
+			debug::info!("cu cost: {:?}", cu_cost);
 
-			let nu_cost = pricing_policy.nu as u64 * seconds_elapsed * report.nru;
+			let mut used_nru = report.nru;
+			if contract.previous_nu_reported > 0 {
+				used_nru -= contract.previous_nu_reported;
+			}
+			let nu_cost = pricing_policy.nu as u64 * seconds_elapsed * used_nru;
+			debug::info!("nu cost: {:?}", nu_cost);
 
 			// save total
 			let total = su_cost + cu_cost + nu_cost;
+			debug::info!("total cost: {:?}", total);
 
 			// get the contracts free balance
 			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 			let balance: BalanceOf<T> = T::Currency::free_balance(&twin.address);
+			debug::info!("free balance: {:?}", balance);
 			
 			let mut decomission = false;
 			let balances_as_u128: u128 = balance.saturated_into::<u128>();
@@ -227,8 +241,9 @@ impl<T: Config> Module<T> {
 				decomission = true;				
 			}
 
-			// convert amount due from u128 to balance object
-			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(balances_as_u128);
+			// convert amount due to balance object
+			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(total);
+			debug::info!("amount due: {:?}", amount_due);
 
 			// fetch farmer twin
 			let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
@@ -238,10 +253,12 @@ impl<T: Config> Module<T> {
                 .map_err(|_| DispatchError::Other("Can't make transfer"))?;
 
 			if decomission {
+				Self::_free_ip(node.address, report.contract_id)?;
 				Contracts::<T>::remove(report.contract_id);
 			} else {
 				// update contract
 				contract.last_updated = now;
+				contract.previous_nu_reported = report.nru;
 				Contracts::<T>::insert(report.contract_id, &contract);
 			}
 		}
