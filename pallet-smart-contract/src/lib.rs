@@ -60,7 +60,12 @@ decl_error! {
 pub struct Contract<AccountId> {
 	twin_id: u32,
 	node_id: AccountId,
-    workload: Vec<u8>,
+	// data is the encrypted deployment body. This encrypted the deployment with the **USER** public key. 
+	// So only the user can read this data later on (or any other key that he keeps safe).
+    // this data part is read only by the user and can actually hold any information to help him reconstruct his deployment or can be left empty.
+	data: Vec<u8>,
+	// Hash of the deployment, set by the user
+	deployment_hash: Vec<u8>,
     public_ips: u32,
 	state: ContractState,
 	last_updated: u64,
@@ -82,11 +87,12 @@ impl Default for ContractState {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Consumption {
 	contract_id: u64,
+	timestamp: u64,
 	cru: u64,
 	sru: u64,
 	hru: u64,
 	mru: u64,
-	nru: u64
+	nru: u64,
 }
 
 decl_storage! {
@@ -131,12 +137,13 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	pub fn _create_contract(address: T::AccountId, contract: Contract<T::AccountId>) -> DispatchResult {
+	pub fn _create_contract(address: T::AccountId, mut contract: Contract<T::AccountId>) -> DispatchResult {
 		let mut id = ContractID::get();
 		id = id+1;
 		
-		ensure!(pallet_tfgrid::Twins::<T>::contains_key(&contract.twin_id), Error::<T>::TwinNotExists);
-		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+		ensure!(pallet_tfgrid::TwinsByPubkeyID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
+		let twin_id = pallet_tfgrid::TwinsByPubkeyID::<T>::get(&address);
+		let twin = pallet_tfgrid::Twins::<T>::get(twin_id);
 		ensure!(twin.address == address, Error::<T>::TwinNotAuthorizedToCreateContract);
 
 		ensure!(pallet_tfgrid::NodesByPubkeyID::<T>::contains_key(&contract.node_id), Error::<T>::NodeNotExists);
@@ -145,10 +152,12 @@ impl<T: Config> Module<T> {
 			Self::_reserve_ip(contract.node_id.clone(), &contract.public_ips, id)?
 		}
 
+		contract.last_updated = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+		contract.twin_id = twin_id;
         Contracts::<T>::insert(id, &contract);
         ContractID::put(id);
 
-        Self::deposit_event(RawEvent::ContractCreated(id, contract.twin_id, contract.workload, contract.public_ips, address));
+        Self::deposit_event(RawEvent::ContractCreated(id, contract.twin_id, contract.data, contract.public_ips, address));
 
         Ok(())
 	}
@@ -197,7 +206,11 @@ impl<T: Config> Module<T> {
 			ensure!(Contracts::<T>::contains_key(report.contract_id), Error::<T>::ContractNotExists);
 			let mut contract = Contracts::<T>::get(report.contract_id);
 			ensure!(contract.node_id == source, Error::<T>::NodeNotAuthorizedToComputeReport);
-			
+
+			if report.timestamp < contract.last_updated {
+				continue;
+			}
+
 			let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&contract.node_id);
 			let node = pallet_tfgrid::Nodes::<T>::get(node_id);
 			ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
@@ -206,8 +219,7 @@ impl<T: Config> Module<T> {
 			ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
 			let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
 
-			let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
-			let seconds_elapsed = now - contract.last_updated;
+			let seconds_elapsed = report.timestamp - contract.last_updated;
 			debug::info!("seconds elapsed: {:?}", seconds_elapsed);
 
 			let su_used = U64F64::from_num(report.hru) / 1200 + U64F64::from_num(report.sru) / 300;
@@ -270,7 +282,7 @@ impl<T: Config> Module<T> {
 				Contracts::<T>::remove(report.contract_id);
 			} else {
 				// update contract
-				contract.last_updated = now;
+				contract.last_updated = report.timestamp;
 				contract.previous_nu_reported = report.nru;
 				Contracts::<T>::insert(report.contract_id, &contract);
 			}
