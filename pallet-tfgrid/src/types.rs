@@ -1,7 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
 use frame_support::traits::Vec;
+use codec::{Decode, Encode};
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct PublicIP {
+    pub ip: Vec<u8>,
+    pub gateway: Vec<u8>,
+    pub contract_id: u64,
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Farm {
@@ -14,13 +21,6 @@ pub struct Farm {
     pub country_id: u32,
     pub city_id: u32,
     pub public_ips: Vec<PublicIP>
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct PublicIP {
-    pub ip: Vec<u8>,
-    pub gateway: Vec<u8>,
-    pub contract_id: u64,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]

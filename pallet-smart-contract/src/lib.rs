@@ -21,6 +21,8 @@ pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Con
 	type Currency: Currency<Self::AccountId>;
 }
 
+pub const CONTRACT_VERSION: u32 = 1;
+
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
 
@@ -58,6 +60,7 @@ decl_error! {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Contract<AccountId> {
+	version: u32,
 	twin_id: u32,
 	node_id: AccountId,
 	// data is the encrypted deployment body. This encrypted the deployment with the **USER** public key. 
@@ -69,7 +72,7 @@ pub struct Contract<AccountId> {
     public_ips: u32,
 	state: ContractState,
 	last_updated: u64,
-	previous_nu_reported: u64,
+	previous_nu_reported: u64
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
@@ -92,7 +95,7 @@ pub struct Consumption {
 	sru: u64,
 	hru: u64,
 	mru: u64,
-	nru: u64,
+	nru: u64
 }
 
 decl_storage! {
@@ -154,6 +157,7 @@ impl<T: Config> Module<T> {
 
 		contract.last_updated = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 		contract.twin_id = twin_id;
+		contract.version = CONTRACT_VERSION;
         Contracts::<T>::insert(id, &contract);
         ContractID::put(id);
 

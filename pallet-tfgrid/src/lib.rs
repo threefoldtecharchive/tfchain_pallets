@@ -120,6 +120,7 @@ decl_error! {
 
         TwinExists,
         TwinNotExists,
+        TwinWithPubkeyExists,
         CannotCreateTwin,
         UnauthorizedToUpdateTwin,
 
@@ -391,6 +392,8 @@ decl_module! {
         #[weight = 10_000 + T::DbWeight::get().writes(1)]
         pub fn create_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
+
+            ensure!(!TwinsByPubkeyID::<T>::contains_key(&address), Error::<T>::TwinWithPubkeyExists);
 
             let mut twin_id = TwinID::get();
             twin_id = twin_id+1;
