@@ -18,6 +18,13 @@ erDiagram
         string ip
         list EntityProofs
     }
+    Twin ||--|{ Proof : can_have_multiple
+    Entity ||--|{ Proof : can_have_multiple
+    Proof {
+        int entityID
+        int twinID
+        string signature
+    }
     Node ||--|{ Farm : linked_to
     Node ||--|{ Role : has_either_one
     Farm {
@@ -26,6 +33,7 @@ erDiagram
         string name
         int twin_id
         list public_ips
+        string certificationType
     }
     Farm ||--|{ PricingPolicy : can_have
     Node {
@@ -46,4 +54,10 @@ erDiagram
         int nu
         int ipv4u
     }
+    Location {
+        string latitude
+        string longitude
+    }
+    Farm ||--|{ Location : has
+    Node ||--|{ Location : has
 ```
