@@ -99,7 +99,7 @@ pub struct Consumption {
 }
 
 decl_storage! {
-	trait Store for Module<T: Config> as c {
+	trait Store for Module<T: Config> as SmartContractModule {
         pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => Contract<T::AccountId>;
         ContractID: u64;
 	}
