@@ -71,6 +71,16 @@ decl_event!(
             u32,
             types::CertificationType,
         ),
+        FarmUpdated(
+            u32,
+            u32,
+            Vec<u8>,
+            u32,
+            u32,
+            u32,
+            u32,
+            types::CertificationType,
+        ),
         FarmDeleted(u32),
 
         NodeStored(u32, u32, u32, types::Resources, types::Location, u32, u32, AccountId, types::Role, u32, Option<types::PublicConfig>),
@@ -107,8 +117,11 @@ decl_error! {
         FarmExists,
         FarmNotExists,
         CannotCreateFarmWrongTwin,
+        CannotUpdateFarmWrongTwin,
         CannotDeleteFarm,
         CannotDeleteFarmWrongTwin,
+        IpExists,
+        IpNotExists,
 
         EntityWithNameExists,
         EntityWithPubkeyExists,
@@ -139,7 +152,7 @@ decl_module! {
 
         fn deposit_event() = default;
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_farm(origin, farm: types::Farm) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -176,7 +189,83 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn update_farm(origin, farm: types::Farm) -> dispatch::DispatchResult {
+            let address = ensure_signed(origin)?;
+
+            ensure!(Farms::contains_key(farm.id), Error::<T>::FarmNotExists);
+
+            let twin = Twins::<T>::get(farm.twin_id);
+            ensure!(twin.address == address, Error::<T>::CannotUpdateFarmWrongTwin);
+
+            let stored_farm = Farms::get(farm.id);
+            // Remove stored farm by name and insert new one
+            FarmsByNameID::remove(stored_farm.name);
+
+            let mut new_farm = farm.clone();
+
+            // Don't override public ips
+            new_farm.public_ips = stored_farm.public_ips;
+
+            Farms::insert(farm.id, &new_farm);
+            FarmsByNameID::insert(new_farm.name.clone(), new_farm.id);
+
+            Self::deposit_event(RawEvent::FarmUpdated(
+                TFGRID_VERSION,
+                new_farm.id,
+                new_farm.name,
+                new_farm.twin_id,
+                new_farm.pricing_policy_id,
+                new_farm.country_id,
+                new_farm.city_id,
+                new_farm.certification_type
+            ));
+            
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn add_farm_ip(origin, id: u32, ip: types::PublicIP) -> dispatch::DispatchResult {
+            let address = ensure_signed(origin)?;
+
+            ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
+            let mut stored_farm = Farms::get(id);
+
+            let twin = Twins::<T>::get(stored_farm.twin_id);
+            ensure!(twin.address == address, Error::<T>::CannotUpdateFarmWrongTwin);
+
+            match stored_farm.public_ips.binary_search(&ip) {
+                Ok(_) => Err(Error::<T>::IpExists.into()),
+                // If the search fails, the caller is not a member of the list
+                Err(_) => {
+                    stored_farm.public_ips.push(ip);
+                    Farms::insert(stored_farm.id, &stored_farm);
+                    Ok(())
+                }
+            }
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn remove_farm_ip(origin, id: u32, ip: types::PublicIP) -> dispatch::DispatchResult {
+            let address = ensure_signed(origin)?;
+
+            ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
+            let mut stored_farm = Farms::get(id);
+
+            let twin = Twins::<T>::get(stored_farm.twin_id);
+            ensure!(twin.address == address, Error::<T>::CannotUpdateFarmWrongTwin);
+
+            match stored_farm.public_ips.binary_search(&ip) {
+                Ok(index) => {
+                    stored_farm.public_ips.remove(index);
+                    Farms::insert(stored_farm.id, &stored_farm);
+                    Ok(())
+                },
+                Err(_) => Err(Error::<T>::IpNotExists.into()),
+            }
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn delete_farm(origin, id: u32) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -197,7 +286,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -234,7 +323,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn update_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -268,7 +357,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn delete_node(origin, id: u32) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -285,7 +374,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_entity(origin, target: T::AccountId, name: Vec<u8>, country_id: u32, city_id: u32, signature: Vec<u8>) -> dispatch::DispatchResult {
             let _ = ensure_signed(origin)?;
 
@@ -328,7 +417,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn update_entity(origin, name: Vec<u8>, country_id: u32, city_id: u32) -> dispatch::DispatchResult {
             let pub_key = ensure_signed(origin)?;
 
@@ -363,7 +452,7 @@ decl_module! {
         }
 
         // TODO: delete all object that have an entity id reference?
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn delete_entity(origin) -> dispatch::DispatchResult {
             let pub_key = ensure_signed(origin)?;
 
@@ -389,7 +478,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
@@ -417,7 +506,7 @@ decl_module! {
 			Ok(())
         }
         
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
 		pub fn update_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
             
@@ -437,7 +526,7 @@ decl_module! {
 		}
 
         // Method for twins only
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn add_twin_entity(origin, twin_id: u32, entity_id: u32, signature: Vec<u8>) -> dispatch::DispatchResult {
             let pub_key = ensure_signed(origin)?;
 
@@ -482,7 +571,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn delete_twin_entity(origin, twin_id: u32, entity_id: u32) -> dispatch::DispatchResult {
             let pub_key = ensure_signed(origin)?;
 
@@ -505,7 +594,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn delete_twin(origin, twin_id: u32) -> dispatch::DispatchResult {
             let pub_key = ensure_signed(origin)?;
 
@@ -525,7 +614,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_pricing_policy(origin, name: Vec<u8>, currency: Vec<u8>, su: u32, cu: u32, nu: u32) -> dispatch::DispatchResult {
             let _ = ensure_signed(origin)?;
 
@@ -553,7 +642,7 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10_000 + T::DbWeight::get().writes(1)]
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_certification_code(origin, name: Vec<u8>, description: Vec<u8>, certification_code_type: types::CertificationCodeType) -> dispatch::DispatchResult {
             let _ = ensure_signed(origin)?;
 
