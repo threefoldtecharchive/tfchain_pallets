@@ -61,8 +61,8 @@ decl_error! {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Contract<AccountId> {
-	contract_id: u64,
 	version: u32,
+	contract_id: u64,
 	twin_id: u32,
 	node_id: AccountId,
 	// data is the encrypted deployment body. This encrypted the deployment with the **USER** public key. 
