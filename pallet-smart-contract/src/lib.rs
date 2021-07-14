@@ -32,7 +32,7 @@ decl_event!(
     where
         AccountId = <T as frame_system::Config>::AccountId,
     {
-		ContractCreated(u64, u32, Vec<u8>, u32, AccountId),
+		ContractCreated(Contract<AccountId>),
 		IPsReserved(u64, Vec<types::PublicIP>),
 		ContractCanceled(u64),
 		IPsFreed(u64, Vec<Vec<u8>>),
@@ -164,7 +164,7 @@ impl<T: Config> Module<T> {
         Contracts::<T>::insert(id, &contract);
         ContractID::put(id);
 
-        Self::deposit_event(RawEvent::ContractCreated(id, contract.twin_id, contract.data, contract.public_ips, address));
+        Self::deposit_event(RawEvent::ContractCreated(contract));
 
         Ok(())
 	}
@@ -334,8 +334,7 @@ impl<T: Config> Module<T> {
 		// Update the farm with the reserved ips
 		pallet_tfgrid::Farms::insert(farm.id, farm);
 
-		// Emit an event containing the IP's reserved for this contract
-		Self::deposit_event(RawEvent::IPsReserved(contract.contract_id, ips));
+		contract.public_ips_list = ips;
 
 		Ok(())
 	}
