@@ -1,12 +1,11 @@
 ```mermaid
 sequenceDiagram
     Twin->>Chain: Deploys contract
-    Chain->>Chain: Read farm, node and contract data
     opt
     Chain->>Chain: Optionally reserves IPs on farm
     end
     Chain->>Twin: Sends contract id
-    Twin->>Node: Sends contract id over RMB
+    Twin->>Node: Send contract ID and workload data over RMB
     Node->>Chain: Checks contract
     Node->>Chain: Set contract deployed
     loop

@@ -33,6 +33,7 @@ decl_event!(
         AccountId = <T as frame_system::Config>::AccountId,
     {
 		ContractCreated(Contract<AccountId>),
+		ContractUpdated(Contract<AccountId>),
 		IPsReserved(u64, Vec<types::PublicIP>),
 		ContractCanceled(u64),
 		IPsFreed(u64, Vec<Vec<u8>>),
@@ -112,25 +113,31 @@ decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 		
-		#[weight = 10_000]
+		#[weight = 10]
 		fn create_contract(origin, contract: Contract<T::AccountId>){
             let address = ensure_signed(origin)?;
             Self::_create_contract(address, contract)?;
 		}
 
-		#[weight = 10_000]
+		#[weight = 10]
+		fn update_contract(origin, contract_id: u64, data: Vec<u8>, deployment_hash: Vec<u8>){
+            let address = ensure_signed(origin)?;
+            Self::_update_contract(address, contract_id, data, deployment_hash)?;
+		}
+
+		#[weight = 10]
 		fn cancel_contract(origin, contract_id: u64){
             let address = ensure_signed(origin)?;
             Self::_cancel_contract(address, contract_id)?;
 		}
 
-		#[weight = 10_000]
+		#[weight = 10]
 		fn deploy_contract(origin, contract_id: u64) {
 			let address = ensure_signed(origin)?;
 			Self::_deploy_contract(address, contract_id)?;
 		}
 
-		#[weight = 10_000]
+		#[weight = 10]
 		fn add_reports(origin, reports: Vec<Consumption>) {
 			let address = ensure_signed(origin)?;
 			Self::_compute_reports(address, reports)?;
@@ -169,12 +176,27 @@ impl<T: Config> Module<T> {
         Ok(())
 	}
 
+	pub fn _update_contract(address: T::AccountId, contract_id: u64, data: Vec<u8>, deployment_hash: Vec<u8>) -> DispatchResult {
+		ensure!(Contracts::<T>::contains_key(contract_id), Error::<T>::ContractNotExists);
+
+		let mut contract = Contracts::<T>::get(contract_id);
+		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+		ensure!(twin.address == address, Error::<T>::TwinNotAuthorizedToCancelContract);
+
+		contract.data = data;
+		contract.deployment_hash = deployment_hash;
+		Contracts::<T>::insert(contract_id, &contract);
+
+		Self::deposit_event(RawEvent::ContractUpdated(contract));
+
+		Ok(())
+	}
+
 	pub fn _cancel_contract(address: T::AccountId, contract_id: u64) -> DispatchResult {
 		ensure!(Contracts::<T>::contains_key(contract_id), Error::<T>::ContractNotExists);
 
 		let contract = Contracts::<T>::get(contract_id);
 		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-		debug::info!("twin address {:?}, signee {:?}", twin.address, address);
 		ensure!(twin.address == address, Error::<T>::TwinNotAuthorizedToCancelContract);
 
 		if contract.public_ips > 0 {
