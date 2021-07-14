@@ -16,7 +16,7 @@ use sp_std::prelude::*;
 #[cfg(test)]
 mod tests;
 
-mod types;
+pub mod types;
 
 pub trait Config: system::Config {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;

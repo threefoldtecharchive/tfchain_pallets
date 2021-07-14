@@ -13,6 +13,7 @@ use sp_runtime::{
 use codec::{Decode, Encode};
 use pallet_tfgrid;
 use pallet_timestamp as timestamp;
+use pallet_tfgrid::types;
 
 use substrate_fixed::types::{U64F64};
 
@@ -32,7 +33,7 @@ decl_event!(
         AccountId = <T as frame_system::Config>::AccountId,
     {
 		ContractCreated(u64, u32, Vec<u8>, u32, AccountId),
-		IPsReserved(u64, Vec<Vec<u8>>),
+		IPsReserved(u64, Vec<types::PublicIP>),
 		ContractCanceled(u64),
 		IPsFreed(u64, Vec<Vec<u8>>),
 		ContractDeployed(u64, AccountId),
@@ -60,6 +61,7 @@ decl_error! {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Contract<AccountId> {
+	contract_id: u64,
 	version: u32,
 	twin_id: u32,
 	node_id: AccountId,
@@ -72,7 +74,8 @@ pub struct Contract<AccountId> {
     public_ips: u32,
 	state: ContractState,
 	last_updated: u64,
-	previous_nu_reported: u64
+	previous_nu_reported: u64,
+	public_ips_list: Vec<types::PublicIP>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
@@ -151,13 +154,13 @@ impl<T: Config> Module<T> {
 
 		ensure!(pallet_tfgrid::NodesByPubkeyID::<T>::contains_key(&contract.node_id), Error::<T>::NodeNotExists);
 
-		if contract.public_ips > 0 {
-			Self::_reserve_ip(contract.node_id.clone(), &contract.public_ips, id)?
-		}
-
+		contract.contract_id = id;
 		contract.last_updated = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 		contract.twin_id = twin_id;
 		contract.version = CONTRACT_VERSION;
+
+		Self::_reserve_ip(&mut contract)?;
+
         Contracts::<T>::insert(id, &contract);
         ContractID::put(id);
 
@@ -295,41 +298,44 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn _reserve_ip(node_id: T::AccountId, number_of_ips_to_reserve: &u32, contract_id: u64) -> DispatchResult {
-		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&node_id);
+	pub fn _reserve_ip(contract: &mut Contract<T::AccountId>) -> DispatchResult {
+		if contract.public_ips == 0 {
+			return Ok(());
+		}
+		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&contract.node_id);
 		let node = pallet_tfgrid::Nodes::<T>::get(node_id);
 
 		ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
 		let mut farm = pallet_tfgrid::Farms::get(node.farm_id);
 
-		debug::info!("Number of farm ips {:?}, number of ips to reserve: {:?}", farm.public_ips.len(), *number_of_ips_to_reserve as usize);
-		ensure!(farm.public_ips.len() >= *number_of_ips_to_reserve as usize, Error::<T>::FarmHasNotEnoughPublicIPs);
+		debug::info!("Number of farm ips {:?}, number of ips to reserve: {:?}", farm.public_ips.len(), contract.public_ips as usize);
+		ensure!(farm.public_ips.len() >= contract.public_ips as usize, Error::<T>::FarmHasNotEnoughPublicIPs);
 
 		let mut ips = Vec::new();
 		for i in 0..farm.public_ips.len() {
 			let mut ip = farm.public_ips[i].clone();
 
-			if ips.len() == *number_of_ips_to_reserve as usize {
+			if ips.len() == contract.public_ips as usize {
 				break;
 			}
 
 			// if an ip has contract id 0 it means it's not reserved
 			// reserve it now
 			if ip.contract_id == 0 {
-				ip.contract_id = contract_id;
+				ip.contract_id = contract.contract_id;
 				farm.public_ips[i] = ip.clone();
-				ips.push(ip.ip);
+				ips.push(ip);
 			}
 		}
 
 		// Safeguard check if we actually have the amount of ips we wanted to reserve
-		ensure!(ips.len() == *number_of_ips_to_reserve as usize, Error::<T>::FarmHasNotEnoughPublicIPsFree);
+		ensure!(ips.len() == contract.public_ips as usize, Error::<T>::FarmHasNotEnoughPublicIPsFree);
 
 		// Update the farm with the reserved ips
 		pallet_tfgrid::Farms::insert(farm.id, farm);
 
 		// Emit an event containing the IP's reserved for this contract
-		Self::deposit_event(RawEvent::IPsReserved(contract_id, ips));
+		Self::deposit_event(RawEvent::IPsReserved(contract.contract_id, ips));
 
 		Ok(())
 	}
