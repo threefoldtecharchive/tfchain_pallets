@@ -20,10 +20,10 @@ version = '2.0.0'
 
 [dependencies.pallet-tfgrid]
 default-features = false
-git = "https://github.com/threefoldtech/substrate-pallets"
-package = "pallet-tfgrid"
-branch = "master"
-# path = "../pallet-tfgrid"
+# git = "https://github.com/threefoldtech/substrate-pallets"
+# package = "pallet-tfgrid"
+# branch = "master"
+path = "../pallet-tfgrid"
 
 [dependencies]
 # Substrate packages
