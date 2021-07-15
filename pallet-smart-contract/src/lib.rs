@@ -229,11 +229,32 @@ impl<T: Config> Module<T> {
 			let seconds_elapsed = report.timestamp - contract.last_updated;
 			debug::info!("seconds elapsed: {:?}", seconds_elapsed);
 
-			let su_used = U64F64::from_num(report.hru) / 1200 + U64F64::from_num(report.sru) / 300;
+			
+			let factor = match pricing_policy.unit {
+				pallet_tfgrid::types::Unit::Bytes => {
+					1
+				}
+				pallet_tfgrid::types::Unit::Kilobytes => {
+					1024
+				}
+				pallet_tfgrid::types::Unit::Megabytes => {
+					1024 * 1024
+				}
+				pallet_tfgrid::types::Unit::Gigabytes => {
+					1024 * 1024 * 1024
+				}
+			};
+
+			let hru = U64F64::from_num(report.hru) / factor;
+			let sru = U64F64::from_num(report.sru) / factor;
+			let mru = U64F64::from_num(report.mru) / factor;
+
+			let mut su_used = hru / 1200 + sru / 300;
+			su_used = su_used / factor;
 			let su_cost = U64F64::from_num(pricing_policy.su) * U64F64::from_num(seconds_elapsed) * su_used;
 			debug::info!("su cost: {:?}", su_cost);
 
-			let mru_used = U64F64::from_num(report.mru) / 4;
+			let mru_used = mru / 4;
 			let cru_used = U64F64::from_num(report.cru) / 2;
 			let min = if mru_used < cru_used {
 				mru_used

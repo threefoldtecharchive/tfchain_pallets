@@ -627,6 +627,7 @@ decl_module! {
 
             let mut new_policy = pricing_policy.clone();
             new_policy.version = TFGRID_VERSION;
+            new_policy.id = id;
 
             PricingPolicies::insert(&id, &new_policy);
             PricingPoliciesByNameID::insert(&pricing_policy.name, &id);
