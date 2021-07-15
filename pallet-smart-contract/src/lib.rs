@@ -339,9 +339,14 @@ impl<T: Config> Module<T> {
 	pub fn _update_contract_state(mut contract: Contract<T::AccountId>, state: ContractState) -> DispatchResult {
 		// Remove contract from double map first
 		let mut contracts = NodeContracts::<T>::get(&contract.node_id, &contract.state);
-		let index = contracts.iter().position(|ct| ct.contract_id == contract.contract_id).unwrap();
-		contracts.remove(index);
-		NodeContracts::<T>::insert(&contract.node_id, &contract.state, &contracts);
+
+		match contracts.iter().position(|ct| ct.contract_id == contract.contract_id) {
+			Some(index) => {
+				contracts.remove(index);
+				NodeContracts::<T>::insert(&contract.node_id, &contract.state, &contracts);
+			},
+			None => ()
+		};
 
 		// Assign new state
 		contract.state = state;
