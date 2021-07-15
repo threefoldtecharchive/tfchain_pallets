@@ -139,6 +139,7 @@ decl_error! {
         UnauthorizedToUpdateTwin,
 
         PricingPolicyExists,
+        PricingPolicyNotExists,
 
         CertificationCodeExists,
 
@@ -630,6 +631,33 @@ decl_module! {
             new_policy.id = id;
 
             PricingPolicies::insert(&id, &new_policy);
+            PricingPoliciesByNameID::insert(&pricing_policy.name, &id);
+            PricingPolicyID::put(id);
+
+            Self::deposit_event(RawEvent::PricingPolicyStored(pricing_policy));
+
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn update_pricing_policy(origin, id: u32, name: Vec<u8>, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
+            let _ = ensure_signed(origin)?;
+
+            ensure!(PricingPolicies::contains_key(&id), Error::<T>::PricingPolicyNotExists);
+            ensure!(!PricingPoliciesByNameID::contains_key(&name), Error::<T>::PricingPolicyExists);
+            let mut pricing_policy = PricingPolicies::get(id);
+
+            if name != pricing_policy.name {
+                PricingPoliciesByNameID::remove(&pricing_policy.name);
+            }
+
+            pricing_policy.name = name;
+            pricing_policy.su = su;
+            pricing_policy.cu = cu;
+            pricing_policy.nu = nu;
+            pricing_policy.ipu = ipu;
+
+            PricingPolicies::insert(&id, &pricing_policy);
             PricingPoliciesByNameID::insert(&pricing_policy.name, &id);
             PricingPolicyID::put(id);
 

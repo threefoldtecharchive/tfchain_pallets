@@ -125,6 +125,7 @@ pub struct PricingPolicy {
     pub su: u32,
     pub cu: u32,
     pub nu: u32,
+    pub ipu: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]

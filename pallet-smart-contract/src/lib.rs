@@ -249,8 +249,7 @@ impl<T: Config> Module<T> {
 			let sru = U64F64::from_num(report.sru) / factor;
 			let mru = U64F64::from_num(report.mru) / factor;
 
-			let mut su_used = hru / 1200 + sru / 300;
-			su_used = su_used / factor;
+			let su_used = hru / 1200 + sru / 300;
 			let su_cost = U64F64::from_num(pricing_policy.su) * U64F64::from_num(seconds_elapsed) * su_used;
 			debug::info!("su cost: {:?}", su_cost);
 
@@ -264,19 +263,23 @@ impl<T: Config> Module<T> {
 			let cu_cost = U64F64::from_num(pricing_policy.cu) * U64F64::from_num(seconds_elapsed) * min;
 			debug::info!("cu cost: {:?}", cu_cost);
 
-			let mut nu_cost = 0;
-			let mut used_nru = report.nru;
-			if used_nru > contract.previous_nu_reported {
+			let mut used_nru = U64F64::from_num(report.nru) / factor;
+			let nu_cost = if used_nru > contract.previous_nu_reported {
 				// calculate used nru by subtracting previous reported units minus what is reported now
 				// this is because nru is in a counter that increases only
-				used_nru -= contract.previous_nu_reported;
+				used_nru -= U64F64::from_num(contract.previous_nu_reported);
+
 				// calculate the cost for nru based on the used nru
-				nu_cost = pricing_policy.nu as u64 * seconds_elapsed * used_nru;
-			}
+				used_nru * U64F64::from_num(pricing_policy.nu)
+			} else {
+				U64F64::from_num(0)
+			};
+
 			debug::info!("nu cost: {:?}", nu_cost);
 
 			// save total
-			let total = su_cost.ceil().to_num::<u64>() + cu_cost.ceil().to_num::<u64>() + nu_cost;
+			let total = su_cost + cu_cost + nu_cost;
+			let total = total.ceil().to_num::<u64>();
 			debug::info!("total cost: {:?}", total);
 
 			// get the contracts free balance
