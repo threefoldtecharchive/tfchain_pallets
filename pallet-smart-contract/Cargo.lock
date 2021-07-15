@@ -1114,7 +1114,7 @@ dependencies = [
 [[package]]
 name = "pallet-tfgrid"
 version = "3.0.0"
-source = "git+https://github.com/threefoldtech/substrate-pallets?branch=master#c1bedfb3f04e9cd1eb7ea566008ddd85f52192c9"
+source = "git+https://github.com/threefoldtech/substrate-pallets?branch=master#87e01dbe30112aee94afa228903a84ef275d3c21"
 dependencies = [
  "frame-support",
  "frame-system",
