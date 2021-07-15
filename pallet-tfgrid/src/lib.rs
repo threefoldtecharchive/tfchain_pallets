@@ -130,6 +130,7 @@ decl_error! {
         EntityWithSignatureAlreadyExists,
         CannotUpdateEntity,
         CannotDeleteEntity,
+        SignatureLenghtIsIncorrect,
 
         TwinExists,
         TwinNotExists,
@@ -383,6 +384,7 @@ decl_module! {
 
             let entity_pubkey_ed25519 = Self::convert_account_to_ed25519(target.clone());
 
+            ensure!(signature.len() == 128, Error::<T>::SignatureLenghtIsIncorrect);
             let decoded_signature_as_byteslice = <[u8; 64]>::from_hex(signature.clone()).expect("Decoding failed");
 
             // Decode signature into a ed25519 signature

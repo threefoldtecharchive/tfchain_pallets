@@ -82,7 +82,8 @@ pub struct Contract<AccountId> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
 pub enum ContractState {
 	Created,
-	Deployed
+	Deployed,
+	OutOfFunds,
 }
 
 impl Default for ContractState {
@@ -308,7 +309,8 @@ impl<T: Config> Module<T> {
 				if contract.public_ips > 0 {
 					Self::_free_ip(node.address, report.contract_id)?;
 				}
-				Contracts::<T>::remove(report.contract_id);
+				contract.state = ContractState::OutOfFunds;
+				Contracts::<T>::insert(report.contract_id, &contract);
 			} else {
 				// update contract
 				contract.last_updated = report.timestamp;
