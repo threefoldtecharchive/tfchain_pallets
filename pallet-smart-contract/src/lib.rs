@@ -106,6 +106,7 @@ pub struct Consumption {
 decl_storage! {
 	trait Store for Module<T: Config> as SmartContractModule {
         pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => Contract<T::AccountId>;
+		pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) T::AccountId, hasher(blake2_128_concat) ContractState => Vec<Contract<T::AccountId>>;
         ContractID: u64;
 	}
 }
@@ -165,6 +166,10 @@ impl<T: Config> Module<T> {
 
         Contracts::<T>::insert(id, &contract);
         ContractID::put(id);
+		
+		let mut node_contracts = NodeContracts::<T>::get(&contract.node_id, &contract.state);
+		node_contracts.push(contract.clone());
+		NodeContracts::<T>::insert(&contract.node_id, &contract.state, &node_contracts);
 
         Self::deposit_event(RawEvent::ContractCreated(contract));
 
@@ -198,8 +203,7 @@ impl<T: Config> Module<T> {
 			Self::_free_ip(&mut contract)?
 		}
 
-		contract.state = ContractState::Deleted;
-        Contracts::<T>::insert(contract_id, &contract);
+		Self::_update_contract_state(contract, ContractState::Deleted)?;
 
         Self::deposit_event(RawEvent::ContractCanceled(contract_id));
 
@@ -207,24 +211,34 @@ impl<T: Config> Module<T> {
 	}
 
 	pub fn _compute_reports(source: T::AccountId, reports: Vec<Consumption>) -> DispatchResult {
-		debug::info!("computing reports: {:?}", reports);
+		// fetch the node from the source account (signee)
+		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&source);
+		let node = pallet_tfgrid::Nodes::<T>::get(node_id);
+		
+		ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
+		let farm = pallet_tfgrid::Farms::get(node.farm_id);
+		
+		ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
+		let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
+
+		// validation
+		for report in &reports {
+		  if !Contracts::<T>::contains_key(report.contract_id) {
+			continue;
+		  }
+		  let contract = Contracts::<T>::get(report.contract_id);
+		  ensure!(contract.node_id == source, Error::<T>::NodeNotAuthorizedToComputeReport);
+		}
 
 		for report in reports {
-			ensure!(Contracts::<T>::contains_key(report.contract_id), Error::<T>::ContractNotExists);
-			let mut contract = Contracts::<T>::get(report.contract_id);
-			ensure!(contract.node_id == source, Error::<T>::NodeNotAuthorizedToComputeReport);
-
-			if report.timestamp < contract.last_updated {
+			if !Contracts::<T>::contains_key(report.contract_id) {
 				continue;
 			}
 
-			let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&contract.node_id);
-			let node = pallet_tfgrid::Nodes::<T>::get(node_id);
-			ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
-			let farm = pallet_tfgrid::Farms::get(node.farm_id);
-
-			ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
-			let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
+			let mut contract = Contracts::<T>::get(report.contract_id);
+			if report.timestamp < contract.last_updated {
+				continue;
+			}
 
 			let seconds_elapsed = report.timestamp - contract.last_updated;
 			debug::info!("seconds elapsed: {:?}", seconds_elapsed);
@@ -310,8 +324,7 @@ impl<T: Config> Module<T> {
 				if contract.public_ips > 0 {
 					Self::_free_ip(&mut contract)?;
 				}
-				contract.state = ContractState::OutOfFunds;
-				Contracts::<T>::insert(report.contract_id, &contract);
+				Self::_update_contract_state(contract, ContractState::OutOfFunds)?;
 			} else {
 				// update contract
 				contract.last_updated = report.timestamp;
@@ -320,6 +333,26 @@ impl<T: Config> Module<T> {
 			}
 		}
 
+		Ok(())
+	}
+
+	pub fn _update_contract_state(mut contract: Contract<T::AccountId>, state: ContractState) -> DispatchResult {
+		// Remove contract from double map first
+		let mut contracts = NodeContracts::<T>::get(&contract.node_id, &contract.state);
+		let index = contracts.iter().position(|ct| ct.contract_id == contract.contract_id).unwrap();
+		contracts.remove(index);
+		NodeContracts::<T>::insert(&contract.node_id, &contract.state, &contracts);
+
+		// Assign new state
+		contract.state = state;
+		
+		// Re-insert new values
+		let mut contracts = NodeContracts::<T>::get(&contract.node_id, &contract.state);
+		contracts.push(contract.clone());
+		NodeContracts::<T>::insert(&contract.node_id, &contract.state, &contracts);
+		
+		Contracts::<T>::insert(&contract.contract_id, &contract);
+		
 		Ok(())
 	}
 

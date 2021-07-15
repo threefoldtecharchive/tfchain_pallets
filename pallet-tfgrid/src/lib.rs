@@ -640,7 +640,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_pricing_policy(origin, id: u32, name: Vec<u8>, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
+        pub fn update_pricing_policy(origin, id: u32, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
             let _ = ensure_signed(origin)?;
 
             ensure!(PricingPolicies::contains_key(&id), Error::<T>::PricingPolicyNotExists);
@@ -652,6 +652,7 @@ decl_module! {
             }
 
             pricing_policy.name = name;
+            pricing_policy.unit = unit;
             pricing_policy.su = su;
             pricing_policy.cu = cu;
             pricing_policy.nu = nu;
