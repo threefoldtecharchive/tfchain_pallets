@@ -82,7 +82,7 @@ pub struct Contract<AccountId> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
 pub enum ContractState {
 	Created,
-	Deployed,
+	Deleted,
 	OutOfFunds,
 }
 
@@ -130,12 +130,6 @@ decl_module! {
 		fn cancel_contract(origin, contract_id: u64){
             let address = ensure_signed(origin)?;
             Self::_cancel_contract(address, contract_id)?;
-		}
-
-		#[weight = 10]
-		fn deploy_contract(origin, contract_id: u64) {
-			let address = ensure_signed(origin)?;
-			Self::_deploy_contract(address, contract_id)?;
 		}
 
 		#[weight = 10]
@@ -196,37 +190,20 @@ impl<T: Config> Module<T> {
 	pub fn _cancel_contract(address: T::AccountId, contract_id: u64) -> DispatchResult {
 		ensure!(Contracts::<T>::contains_key(contract_id), Error::<T>::ContractNotExists);
 
-		let contract = Contracts::<T>::get(contract_id);
+		let mut contract = Contracts::<T>::get(contract_id);
 		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 		ensure!(twin.address == address, Error::<T>::TwinNotAuthorizedToCancelContract);
 
 		if contract.public_ips > 0 {
-			Self::_free_ip(contract.node_id, contract_id)?
+			Self::_free_ip(&mut contract)?
 		}
 
-        Contracts::<T>::remove(contract_id);
+		contract.state = ContractState::Deleted;
+        Contracts::<T>::insert(contract_id, &contract);
 
         Self::deposit_event(RawEvent::ContractCanceled(contract_id));
 
         Ok(())
-	}
-
-	pub fn _deploy_contract(address: T::AccountId, contract_id: u64) -> DispatchResult {
-		ensure!(Contracts::<T>::contains_key(contract_id), Error::<T>::ContractNotExists);
-
-		let mut contract = Contracts::<T>::get(contract_id);
-		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&contract.node_id);
-		let node = pallet_tfgrid::Nodes::<T>::get(node_id);
-
-		ensure!(node.address == address, Error::<T>::NodeNotAuthorizedToDeployContract);
-
-		contract.state = ContractState::Deployed;
-		contract.last_updated = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
-        Contracts::<T>::insert(contract_id, &contract);
-
-		Self::deposit_event(RawEvent::ContractDeployed(contract_id, address));
-
-		Ok(())
 	}
 
 	pub fn _compute_reports(source: T::AccountId, reports: Vec<Consumption>) -> DispatchResult {
@@ -307,7 +284,7 @@ impl<T: Config> Module<T> {
 
 			if decomission {
 				if contract.public_ips > 0 {
-					Self::_free_ip(node.address, report.contract_id)?;
+					Self::_free_ip(&mut contract)?;
 				}
 				contract.state = ContractState::OutOfFunds;
 				Contracts::<T>::insert(report.contract_id, &contract);
@@ -363,8 +340,8 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn _free_ip(node_id: T::AccountId, contract_id: u64)  -> DispatchResult {
-		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&node_id);
+	pub fn _free_ip(contract: &mut Contract<T::AccountId>)  -> DispatchResult {
+		let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&contract.node_id);
 		let node = pallet_tfgrid::Nodes::<T>::get(node_id);
 
 		ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
@@ -376,7 +353,7 @@ impl<T: Config> Module<T> {
 
 			// if an ip has contract id 0 it means it's not reserved
 			// reserve it now
-			if ip.contract_id == contract_id {
+			if ip.contract_id == contract.contract_id {
 				ip.contract_id = 0;
 				farm.public_ips[i] = ip.clone();
 				ips_freed.push(ip.ip);
@@ -386,7 +363,7 @@ impl<T: Config> Module<T> {
 		pallet_tfgrid::Farms::insert(farm.id, farm);
 
 		// Emit an event containing the IP's freed for this contract
-		Self::deposit_event(RawEvent::IPsFreed(contract_id, ips_freed));
+		Self::deposit_event(RawEvent::IPsFreed(contract.contract_id, ips_freed));
 
 		Ok(())
 	}

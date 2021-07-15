@@ -98,7 +98,7 @@ decl_event!(
         TwinEntityRemoved(u32, u32),
         TwinDeleted(u32),
 
-        PricingPolicyStored(u32, Vec<u8>, u32),
+        PricingPolicyStored(types::PricingPolicy),
         CertificationCodeStored(u32, Vec<u8>, u32),
     }
 );
@@ -617,29 +617,22 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_pricing_policy(origin, name: Vec<u8>, currency: Vec<u8>, su: u32, cu: u32, nu: u32) -> dispatch::DispatchResult {
+        pub fn create_pricing_policy(origin, pricing_policy: types::PricingPolicy) -> dispatch::DispatchResult {
             let _ = ensure_signed(origin)?;
 
-            ensure!(!PricingPoliciesByNameID::contains_key(&name), Error::<T>::PricingPolicyExists);
+            ensure!(!PricingPoliciesByNameID::contains_key(&pricing_policy.name), Error::<T>::PricingPolicyExists);
 
             let mut id = PricingPolicyID::get();
             id = id+1;
 
-            let policy = types::PricingPolicy {
-                version: TFGRID_VERSION,
-                id,
-                name: name.clone(),
-                currency,
-                su,
-                cu,
-                nu
-            };
+            let mut new_policy = pricing_policy.clone();
+            new_policy.version = TFGRID_VERSION;
 
-            PricingPolicies::insert(&id, &policy);
-            PricingPoliciesByNameID::insert(&name, &id);
+            PricingPolicies::insert(&id, &new_policy);
+            PricingPoliciesByNameID::insert(&pricing_policy.name, &id);
             PricingPolicyID::put(id);
 
-            Self::deposit_event(RawEvent::PricingPolicyStored(TFGRID_VERSION, name, id));
+            Self::deposit_event(RawEvent::PricingPolicyStored(pricing_policy));
 
             Ok(())
         }

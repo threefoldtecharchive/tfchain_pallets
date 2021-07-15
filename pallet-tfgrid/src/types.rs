@@ -121,10 +121,24 @@ pub struct PricingPolicy {
     pub version: u32,
     pub id: u32,
     pub name: Vec<u8>,
-    pub currency: Vec<u8>,
+    pub unit: Unit,
     pub su: u32,
     pub cu: u32,
     pub nu: u32,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
+pub enum Unit {
+    Bytes,
+    Kilobytes,
+    Megabytes,
+    Gigabytes
+}
+
+impl Default for Unit {
+    fn default() -> Unit {
+        Unit::Gigabytes
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
