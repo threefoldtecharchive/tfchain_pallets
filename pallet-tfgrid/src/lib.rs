@@ -61,45 +61,27 @@ decl_event!(
     where
         AccountId = <T as frame_system::Config>::AccountId,
     {
-        FarmStored(
-            u32,
-            u32,
-            Vec<u8>,
-            u32,
-            u32,
-            u32,
-            u32,
-            types::CertificationType,
-        ),
-        FarmUpdated(
-            u32,
-            u32,
-            Vec<u8>,
-            u32,
-            u32,
-            u32,
-            u32,
-            types::CertificationType,
-        ),
+        FarmStored(types::Farm),
+        FarmUpdated(types::Farm),
         FarmDeleted(u32),
 
-        NodeStored(u32, u32, u32, types::Resources, types::Location, u32, u32, AccountId, types::Role, u32, Option<types::PublicConfig>),
-        NodeUpdated(u32, u32, u32, types::Resources, types::Location, u32, u32, AccountId, types::Role, u32, Option<types::PublicConfig>),
+        NodeStored(types::Node<AccountId>),
+        NodeUpdated(types::Node<AccountId>),
         NodeDeleted(u32),
 
-        EntityStored(u32, u32, Vec<u8>, u32, u32, AccountId),
-        EntityUpdated(u32, Vec<u8>, u32, u32, AccountId),
+        EntityStored(types::Entity<AccountId>),
+        EntityUpdated(types::Entity<AccountId>),
         EntityDeleted(u32),
 
-        TwinStored(u32, u32, AccountId, Vec<u8>),
-        TwinUpdated(u32, AccountId, Vec<u8>),
+        TwinStored(types::Twin<AccountId>),
+        TwinUpdated(types::Twin<AccountId>),
 
         TwinEntityStored(u32, u32, Vec<u8>),
         TwinEntityRemoved(u32, u32),
         TwinDeleted(u32),
 
         PricingPolicyStored(types::PricingPolicy),
-        CertificationCodeStored(u32, Vec<u8>, u32),
+        CertificationCodeStored(types::CertificationCodes),
     }
 );
 
@@ -155,79 +137,81 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_farm(origin, farm: types::Farm) -> dispatch::DispatchResult {
+        pub fn create_farm(origin, name: Vec<u8>, pricing_policy_id: u32, certification_type: types::CertificationType, country_id: u32, city_id: u32, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
-            ensure!(!FarmsByNameID::contains_key(farm.name.clone()), Error::<T>::FarmExists);
-
-            ensure!(Twins::<T>::contains_key(farm.twin_id), Error::<T>::TwinNotExists);
-            
-            let twin = Twins::<T>::get(farm.twin_id);
+            ensure!(!FarmsByNameID::contains_key(name.clone()), Error::<T>::FarmExists);
+            ensure!(TwinsByPubkeyID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
+            let twin_id = TwinsByPubkeyID::<T>::get(&address);
+            let twin = Twins::<T>::get(twin_id);
             ensure!(twin.address == address, Error::<T>::CannotCreateFarmWrongTwin);
 
             let mut id = FarmID::get();
             id = id+1;
 
-            let mut new_farm = farm.clone();
+            // reset all public ip contract id's
+            // just a safeguard
+            let mut pub_ips = Vec::new();
+            for ip in public_ips {
+                pub_ips.push(types::PublicIP{
+                    ip: ip.ip,
+                    gateway: ip.gateway,
+                    contract_id: 0
+                });
+            };
 
-            new_farm.id = id;
-            new_farm.version = TFGRID_VERSION;
+            let new_farm = types::Farm {
+                version: TFGRID_VERSION,
+                id,
+                twin_id,
+                name,
+                pricing_policy_id,
+                certification_type,
+                country_id,
+                city_id,
+                public_ips: pub_ips,
+            };
 
             Farms::insert(id, &new_farm);
             FarmsByNameID::insert(new_farm.name.clone(), id);
             FarmID::put(id);
 
-            Self::deposit_event(RawEvent::FarmStored(
-                TFGRID_VERSION,
-                id,
-                new_farm.name,
-                new_farm.twin_id,
-                new_farm.pricing_policy_id,
-                new_farm.country_id,
-                new_farm.city_id,
-                new_farm.certification_type
-            ));
+            Self::deposit_event(RawEvent::FarmStored(new_farm));
 
             Ok(())
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_farm(origin, farm: types::Farm) -> dispatch::DispatchResult {
+        pub fn update_farm(origin, id: u32, name: Vec<u8>, pricing_policy_id: u32, certification_type: types::CertificationType, country_id: u32, city_id: u32) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
-            ensure!(Farms::contains_key(farm.id), Error::<T>::FarmNotExists);
+            ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
 
-            let twin = Twins::<T>::get(farm.twin_id);
+            ensure!(TwinsByPubkeyID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
+            let twin_id = TwinsByPubkeyID::<T>::get(&address);
+            let twin = Twins::<T>::get(twin_id);
             ensure!(twin.address == address, Error::<T>::CannotUpdateFarmWrongTwin);
 
-            let stored_farm = Farms::get(farm.id);
+            let mut stored_farm = Farms::get(id);
             // Remove stored farm by name and insert new one
             FarmsByNameID::remove(stored_farm.name);
 
-            let mut new_farm = farm.clone();
+            stored_farm.name = name.clone();
+            stored_farm.pricing_policy_id = pricing_policy_id;
+            stored_farm.certification_type = certification_type;
+            stored_farm.country_id = country_id;
+            stored_farm.city_id = city_id;
 
-            // Don't override public ips
-            new_farm.public_ips = stored_farm.public_ips;
+            Farms::insert(id, &stored_farm);
+            FarmsByNameID::insert(name, stored_farm.id);
 
-            Farms::insert(farm.id, &new_farm);
-            FarmsByNameID::insert(new_farm.name.clone(), new_farm.id);
-
-            Self::deposit_event(RawEvent::FarmUpdated(
-                TFGRID_VERSION,
-                new_farm.id,
-                new_farm.name,
-                new_farm.twin_id,
-                new_farm.pricing_policy_id,
-                new_farm.country_id,
-                new_farm.city_id,
-                new_farm.certification_type
-            ));
+            Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
             
             Ok(())
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn add_farm_ip(origin, id: u32, ip: types::PublicIP) -> dispatch::DispatchResult {
+        pub fn add_farm_ip(origin, id: u32, ip: Vec<u8>, gateway: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
@@ -236,19 +220,26 @@ decl_module! {
             let twin = Twins::<T>::get(stored_farm.twin_id);
             ensure!(twin.address == address, Error::<T>::CannotUpdateFarmWrongTwin);
 
-            match stored_farm.public_ips.binary_search(&ip) {
+            let new_ip = types::PublicIP {
+                ip,
+                gateway,
+                contract_id: 0
+            };
+
+            match stored_farm.public_ips.binary_search(&new_ip) {
                 Ok(_) => Err(Error::<T>::IpExists.into()),
                 // If the search fails, the caller is not a member of the list
                 Err(_) => {
-                    stored_farm.public_ips.push(ip);
+                    stored_farm.public_ips.push(new_ip);
                     Farms::insert(stored_farm.id, &stored_farm);
+                    Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
                     Ok(())
                 }
             }
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn remove_farm_ip(origin, id: u32, ip: types::PublicIP) -> dispatch::DispatchResult {
+        pub fn remove_farm_ip(origin, id: u32, ip: Vec<u8>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
@@ -257,13 +248,14 @@ decl_module! {
             let twin = Twins::<T>::get(stored_farm.twin_id);
             ensure!(twin.address == address, Error::<T>::CannotUpdateFarmWrongTwin);
 
-            match stored_farm.public_ips.binary_search(&ip) {
-                Ok(index) => {
+            match stored_farm.public_ips.iter().position(|pubip| pubip.ip == ip && pubip.contract_id == 0) {
+                Some(index) => {
                     stored_farm.public_ips.remove(index);
                     Farms::insert(stored_farm.id, &stored_farm);
+                    Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
                     Ok(())
                 },
-                Err(_) => Err(Error::<T>::IpNotExists.into()),
+                None => Err(Error::<T>::IpNotExists.into()),
             }
         }
 
@@ -289,72 +281,66 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
+        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country_id: u32, city_id: u32, role: types::Role, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
-            ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
+            ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
             ensure!(!NodesByPubkeyID::<T>::contains_key(address.clone()), Error::<T>::NodeWithPubkeyExists);
-            ensure!(Twins::<T>::contains_key(node.twin_id), Error::<T>::TwinNotExists);
+
+            ensure!(TwinsByPubkeyID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
+            let twin_id = TwinsByPubkeyID::<T>::get(&address);
 
             let mut id = NodeID::get();
             id = id+1;
 
-            let mut new_node = node.clone();
-            new_node.id = id;
-            new_node.address = address.clone();
-            new_node.version = TFGRID_VERSION;
+            let new_node = types::Node {
+                version: TFGRID_VERSION,
+                id,
+                farm_id,
+                twin_id,
+                resources,
+                location,
+                country_id,
+                city_id,
+                address,
+                role,
+                public_config
+            };
 
             Nodes::<T>::insert(id, &new_node);
             NodeID::put(id);
-            NodesByPubkeyID::<T>::insert(address.clone(), id);
+            NodesByPubkeyID::<T>::insert(new_node.address.clone(), id);
 
-            Self::deposit_event(RawEvent::NodeStored(
-                TFGRID_VERSION,
-                id,
-                new_node.farm_id,
-                new_node.resources,
-                new_node.location,
-                new_node.country_id,
-                new_node.city_id,
-                address,
-                new_node.role,
-                new_node.twin_id,
-                new_node.public_config
-            ));
+            Self::deposit_event(RawEvent::NodeStored(new_node));
 
             Ok(())
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_node(origin, node: types::Node<T::AccountId>) -> dispatch::DispatchResult {
+        pub fn update_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country_id: u32, city_id: u32, role: types::Role, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
-            ensure!(Nodes::<T>::contains_key(node.id), Error::<T>::NodeNotExists);
-            ensure!(Farms::contains_key(node.farm_id), Error::<T>::FarmNotExists);
-            ensure!(NodesByPubkeyID::<T>::contains_key(address.clone()), Error::<T>::NodeNotExists);
-            ensure!(Twins::<T>::contains_key(node.twin_id), Error::<T>::TwinNotExists);
+            ensure!(NodesByPubkeyID::<T>::contains_key(&address), Error::<T>::NodeNotExists);
+            ensure!(TwinsByPubkeyID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
+            let node_id = NodesByPubkeyID::<T>::get(&address);
 
-            let stored_node = Nodes::<T>::get(node.id);
-            ensure!(stored_node.address == address, Error::<T>::NodeNotExists);
+            ensure!(Nodes::<T>::contains_key(node_id), Error::<T>::NodeNotExists);
+            ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
+            
+            let mut stored_node = Nodes::<T>::get(node_id);
 
-            let mut new_node = node.clone();
-            new_node.address = address.clone();
+            stored_node.farm_id = farm_id;
+            stored_node.resources = resources;
+            stored_node.location = location;
+            stored_node.country_id = country_id;
+            stored_node.city_id = city_id;
+            stored_node.role = role;
+            stored_node.public_config = public_config;
+
             // override node in storage
-            Nodes::<T>::insert(stored_node.id, &new_node);
+            Nodes::<T>::insert(stored_node.id, &stored_node);
 
-            Self::deposit_event(RawEvent::NodeUpdated(
-                node.version,
-                node.id,
-                node.farm_id,
-                node.resources,
-                node.location,
-                node.country_id,
-                node.city_id,
-                address,
-                node.role,
-                node.twin_id,
-                node.public_config
-            ));
+            Self::deposit_event(RawEvent::NodeUpdated(stored_node));
 
             Ok(())
         }
@@ -415,7 +401,7 @@ decl_module! {
             EntitiesByPubkeyID::<T>::insert(&target, id);
             EntityID::put(id);
 
-            Self::deposit_event(RawEvent::EntityStored(TFGRID_VERSION, id, name, country_id, city_id, target));
+            Self::deposit_event(RawEvent::EntityStored(entity));
 
             Ok(())
         }
@@ -449,7 +435,7 @@ decl_module! {
             // re-insert with new name
             EntitiesByNameID::insert(&name, stored_entity_id);
 
-            Self::deposit_event(RawEvent::EntityUpdated(stored_entity_id, name, country_id, city_id, pub_key));
+            Self::deposit_event(RawEvent::EntityUpdated(stored_entity));
 
             Ok(())
         }
@@ -504,7 +490,7 @@ decl_module! {
             // add the twin id to this users map of twin ids
 			TwinsByPubkeyID::<T>::insert(&address.clone(), twin_id);
 
-			Self::deposit_event(RawEvent::TwinStored(TFGRID_VERSION, twin_id, address, ip));
+			Self::deposit_event(RawEvent::TwinStored(twin));
 			
 			Ok(())
         }
@@ -524,7 +510,7 @@ decl_module! {
 
             Twins::<T>::insert(&twin_id, &twin);
 
-            Self::deposit_event(RawEvent::TwinUpdated(twin_id, address, ip));
+            Self::deposit_event(RawEvent::TwinUpdated(twin));
             Ok(())
 		}
 
@@ -618,23 +604,31 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_pricing_policy(origin, pricing_policy: types::PricingPolicy) -> dispatch::DispatchResult {
+        pub fn create_pricing_policy(origin, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
             let _ = ensure_signed(origin)?;
 
-            ensure!(!PricingPoliciesByNameID::contains_key(&pricing_policy.name), Error::<T>::PricingPolicyExists);
+            ensure!(!PricingPoliciesByNameID::contains_key(&name), Error::<T>::PricingPolicyExists);
 
             let mut id = PricingPolicyID::get();
             id = id+1;
 
-            let mut new_policy = pricing_policy.clone();
-            new_policy.version = TFGRID_VERSION;
-            new_policy.id = id;
+
+            let new_policy = types::PricingPolicy {
+                version: TFGRID_VERSION,
+                id,
+                name,
+                unit,
+                su,
+                cu,
+                nu,
+                ipu
+            };
 
             PricingPolicies::insert(&id, &new_policy);
-            PricingPoliciesByNameID::insert(&pricing_policy.name, &id);
+            PricingPoliciesByNameID::insert(&new_policy.name, &id);
             PricingPolicyID::put(id);
 
-            Self::deposit_event(RawEvent::PricingPolicyStored(pricing_policy));
+            Self::deposit_event(RawEvent::PricingPolicyStored(new_policy));
 
             Ok(())
         }
@@ -688,7 +682,7 @@ decl_module! {
             CertificationCodesByNameID::insert(&name, &id);
             CertificationCodeID::put(id);
 
-            Self::deposit_event(RawEvent::CertificationCodeStored(TFGRID_VERSION, name, id));
+            Self::deposit_event(RawEvent::CertificationCodeStored(certification_code));
 
             Ok(())
         }
