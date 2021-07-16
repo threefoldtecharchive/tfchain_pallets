@@ -77,6 +77,7 @@ pub struct Contract<AccountId> {
 	last_updated: u64,
 	previous_nu_reported: u64,
 	public_ips_list: Vec<types::PublicIP>,
+	amount_unbilled: u64,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
@@ -107,6 +108,7 @@ decl_storage! {
 	trait Store for Module<T: Config> as SmartContractModule {
         pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => Contract<T::AccountId>;
 		pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) T::AccountId, hasher(blake2_128_concat) ContractState => Vec<Contract<T::AccountId>>;
+		pub ContractsToBillAt get(fn ip_expires_at): map hasher(blake2_128_concat) u64 => Vec<u64>;
         ContractID: u64;
 	}
 }
@@ -116,9 +118,9 @@ decl_module! {
 		fn deposit_event() = default;
 		
 		#[weight = 10]
-		fn create_contract(origin, contract: Contract<T::AccountId>){
+		fn create_contract(origin, node_id: T::AccountId, data: Vec<u8>, deployment_hash: Vec<u8>, public_ips: u32){
             let address = ensure_signed(origin)?;
-            Self::_create_contract(address, contract)?;
+            Self::_create_contract(address, node_id, data, deployment_hash, public_ips)?;
 		}
 
 		#[weight = 10]
@@ -139,14 +141,22 @@ decl_module! {
 			Self::_compute_reports(address, reports)?;
 		}
 
-		// fn on_finalize(block: T::BlockNumber) {
-			
-		// }
+		fn on_finalize(block: T::BlockNumber) {
+			debug::info!("Entering on finalize: {:?}", block);
+			match Self::_bill_contracts_at_block(block) {
+				Ok(_) => {
+					debug::info!("Contract billed successfully at block: {:?}", block);
+				},
+				Err(err) => {
+					debug::info!("Contract billed failed at block: {:?} with err {:?}", block, err);
+				}
+			}
+		}
 	}
 }
 
 impl<T: Config> Module<T> {
-	pub fn _create_contract(address: T::AccountId, mut contract: Contract<T::AccountId>) -> DispatchResult {
+	pub fn _create_contract(address: T::AccountId, node_id: T::AccountId, data: Vec<u8>, deployment_hash: Vec<u8>, public_ips: u32) -> DispatchResult {
 		let mut id = ContractID::get();
 		id = id+1;
 		
@@ -155,14 +165,26 @@ impl<T: Config> Module<T> {
 		let twin = pallet_tfgrid::Twins::<T>::get(twin_id);
 		ensure!(twin.address == address, Error::<T>::TwinNotAuthorizedToCreateContract);
 
-		ensure!(pallet_tfgrid::NodesByPubkeyID::<T>::contains_key(&contract.node_id), Error::<T>::NodeNotExists);
+		ensure!(pallet_tfgrid::NodesByPubkeyID::<T>::contains_key(&node_id), Error::<T>::NodeNotExists);
 
-		contract.contract_id = id;
-		contract.last_updated = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
-		contract.twin_id = twin_id;
-		contract.version = CONTRACT_VERSION;
+		let mut contract = Contract {
+			version: CONTRACT_VERSION,
+			contract_id: id,
+			node_id,
+			data,
+			deployment_hash,
+			public_ips,
+			twin_id,
+			last_updated: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
+			previous_nu_reported: 0,
+			amount_unbilled: 0,
+			state: ContractState::Created,
+			public_ips_list: Vec::new()
+		};
 
 		Self::_reserve_ip(&mut contract)?;
+
+		Self::_reinsert_contract_to_bill(contract.contract_id)?;
 
         Contracts::<T>::insert(id, &contract);
         ContractID::put(id);
@@ -296,6 +318,52 @@ impl<T: Config> Module<T> {
 			let total = total.ceil().to_num::<u64>();
 			debug::info!("total cost: {:?}", total);
 
+			// update contract
+			contract.amount_unbilled += total;
+			contract.last_updated = report.timestamp;
+			contract.previous_nu_reported = report.nru;
+			Contracts::<T>::insert(report.contract_id, &contract);
+		}
+
+		Ok(())
+	}
+
+	pub fn _bill_contracts_at_block(block: T::BlockNumber) -> DispatchResult {
+		let current_block_u64: u64 = block.saturated_into::<u64>();
+		let contracts = ContractsToBillAt::get(current_block_u64);
+
+		debug::info!("Contracts to check at block: {:?}, {:?}", block, contracts);
+		if contracts.len() == 0 {
+			return Ok(())
+		}
+
+		for contract_id in contracts {
+			let mut contract = Contracts::<T>::get(contract_id);
+			if contract.state != ContractState::Created {
+				continue
+			}
+			
+			let node_id = pallet_tfgrid::NodesByPubkeyID::<T>::get(&contract.node_id);
+			let node = pallet_tfgrid::Nodes::<T>::get(node_id);
+			
+			ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
+			let farm = pallet_tfgrid::Farms::get(node.farm_id);
+			
+			ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
+			let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
+			
+			// bill user for 1 hour ip usage (10 blocks * 6 seconds)
+			let total_ip_cost = contract.public_ips * pricing_policy.ipu * (10 * 6);
+
+			let total = total_ip_cost as u64 + contract.amount_unbilled;
+
+			if total == 0 {
+				Self::_reinsert_contract_to_bill(contract.contract_id)?;
+				continue
+			}
+
+			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(total);
+
 			// get the contracts free balance
 			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 			let balance: BalanceOf<T> = T::Currency::free_balance(&twin.address);
@@ -309,30 +377,41 @@ impl<T: Config> Module<T> {
 				decomission = true;				
 			}
 
-			// convert amount due to balance object
-			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(total);
-			debug::info!("amount due: {:?}", amount_due);
-
+			// fetch source twin
+			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 			// fetch farmer twin
 			let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
 			debug::info!("Transfering: {:?} from contract {:?} to farmer {:?}", &amount_due, &twin.address, &farmer_twin.address);
-            // Transfer currency to the farmers account
-            T::Currency::transfer(&twin.address, &farmer_twin.address, amount_due, AllowDeath)
-                .map_err(|_| DispatchError::Other("Can't make transfer"))?;
+			// Transfer currency to the farmers account
+			T::Currency::transfer(&twin.address, &farmer_twin.address, amount_due, AllowDeath)
+				.map_err(|_| DispatchError::Other("Can't make transfer"))?;
 
 			if decomission {
 				if contract.public_ips > 0 {
 					Self::_free_ip(&mut contract)?;
 				}
 				Self::_update_contract_state(contract, ContractState::OutOfFunds)?;
-			} else {
-				// update contract
-				contract.last_updated = report.timestamp;
-				contract.previous_nu_reported = report.nru;
-				Contracts::<T>::insert(report.contract_id, &contract);
+				continue
 			}
-		}
 
+			// set the amount unbilled back to 0
+			contract.amount_unbilled = 0;
+			Contracts::<T>::insert(contract.contract_id, &contract);
+
+			Self::_reinsert_contract_to_bill(contract.contract_id)?;
+		}
+		Ok(())
+	}
+
+	pub fn _reinsert_contract_to_bill(contract_id: u64) -> DispatchResult {
+		// Save the contract
+		let now = <frame_system::Module<T>>::block_number().saturated_into::<u64>();
+		// Save the contract to be billed in 10 blocks
+		let future_block = now + 10;
+		let mut contracts = ContractsToBillAt::get(future_block);
+		contracts.push(contract_id);
+		ContractsToBillAt::insert(future_block, &contracts);
+		debug::info!("Insert contracts: {:?}, to be billed at block {:?}", contracts, future_block);
 		Ok(())
 	}
 
