@@ -410,28 +410,26 @@ decl_module! {
         pub fn update_entity(origin, name: Vec<u8>, country_id: u32, city_id: u32) -> dispatch::DispatchResult {
             let pub_key = ensure_signed(origin)?;
 
+            ensure!(!EntitiesByNameID::contains_key(&name), Error::<T>::EntityWithNameExists);
+
             ensure!(EntitiesByPubkeyID::<T>::contains_key(&pub_key), Error::<T>::EntityNotExists);
             let stored_entity_id = EntitiesByPubkeyID::<T>::get(&pub_key);
 
             ensure!(Entities::<T>::contains_key(&stored_entity_id), Error::<T>::EntityNotExists);
-            let stored_entity = Entities::<T>::get(stored_entity_id);
+            let mut stored_entity = Entities::<T>::get(stored_entity_id);
 
             ensure!(stored_entity.address == pub_key, Error::<T>::CannotUpdateEntity);
 
-            let entity = types::Entity::<T::AccountId> {
-                version: TFGRID_VERSION,
-                id: stored_entity_id,
-                name: name.clone(),
-                country_id,
-                city_id,
-                address: pub_key.clone(),
-            };
-
-            // overwrite entity
-            Entities::<T>::insert(&stored_entity_id, &entity);
-
             // remove entity by name id
             EntitiesByNameID::remove(&stored_entity.name);
+            
+            stored_entity.name = name.clone();
+            stored_entity.country_id = country_id;
+            stored_entity.city_id = city_id;
+
+            // overwrite entity
+            Entities::<T>::insert(&stored_entity_id, &stored_entity);
+
             // re-insert with new name
             EntitiesByNameID::insert(&name, stored_entity_id);
 
