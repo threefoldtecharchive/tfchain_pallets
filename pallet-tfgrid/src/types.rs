@@ -72,7 +72,7 @@ pub struct Gateway<AccountId> {
     pub address: AccountId,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Encode, Decode, Default)]
 pub struct Entity<AccountId> {
     pub version: u32,
     pub id: u32,
@@ -83,7 +83,7 @@ pub struct Entity<AccountId> {
 }
 
 //digital twin
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Twin<AccountId> {
     pub version: u32,
     pub id: u32,
@@ -95,7 +95,7 @@ pub struct Twin<AccountId> {
     pub entities: Vec<EntityProof>
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct EntityProof {
     pub entity_id: u32,
     pub signature: Vec<u8>,
