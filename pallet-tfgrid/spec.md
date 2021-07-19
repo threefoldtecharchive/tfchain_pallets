@@ -5,9 +5,11 @@ The puprose of the Grid Database on Substrate is to decentralise the way we work
 Following identities are stored on Substrate:
 
 - Entities (physical humain beings, only 1 entity per human).
-- Twin (digital copies of a human, one can have many).
+- Twin (Digital Assistant).
 - Farmers (Threefold grid Farmers).
 - Node (Threefold grid physical Nodes).
+
+A Twin object is digital representation of either a User, Node or a Farm. It facilitates a way to communicate against the chain.
 
 [Entity Relationship Diagram](./diagram.md)
 
@@ -217,7 +219,7 @@ https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fexplorer.devnet.grid.tf%2Fws#/extr
 
 We store every creation / update / deletion of above objects in a graphql database. An end user of any other application can query the objects from the substrate database without having to talk to the substrate nodes. 
 
-[example](graphql)
+[example](./graphql.md)
 
 ## Note
 
