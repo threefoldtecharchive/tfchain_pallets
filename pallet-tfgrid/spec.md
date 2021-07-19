@@ -13,7 +13,7 @@ Following identities are stored on Substrate:
 
 ## Prelude
 
-In this Pallet we advise users to use ed25519 Keypairs to sign extrinsics on chain. Since we are using ed25519 keypairs on Zero-OS we want to make this consistent on chain as well. Whilst we do not enforce ed25519, sr25519 can be used but is generaly not advised.
+This pallet does not support the use of any keys other than ed25519 to sign extrinsics. This is because we are using ed25519 keypairs on Zero-OS and we want to make this consistent on chain as well.
 
 Every `address` field noted below in this document describes an ed25119 Public Key in [SS58](https://substrate.dev/docs/en/knowledgebase/advanced/ss58-address-format) format. We use this encoding since it's the Substrate standard.
 
