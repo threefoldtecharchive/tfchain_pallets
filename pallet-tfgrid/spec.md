@@ -9,7 +9,7 @@ Following identities are stored on Substrate:
 - Farmers (Threefold grid Farmers).
 - Node (Threefold grid physical Nodes).
 
-[Entity Relationship Diagram](./er_diagram.md)
+[Entity Relationship Diagram](./diagram.md)
 
 ## Prelude
 
