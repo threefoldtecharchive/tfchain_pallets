@@ -9,8 +9,8 @@ erDiagram
         int city_id
         string address
     }
-    Twin ||--|{ Farm : can_have_multiple
-    Twin ||--|{ Node : can_have_multiple
+    Twin ||--|{ Farm : can_be_a
+    Twin ||--|{ Node : can_be_a
     Twin {
         int version
         int id
@@ -26,7 +26,6 @@ erDiagram
         string signature
     }
     Node ||--|{ Farm : linked_to
-    Node ||--|{ Role : has_either_one
     Farm {
         int version
         int id
@@ -34,6 +33,7 @@ erDiagram
         int twin_id
         list public_ips
         string certificationType
+        string location
     }
     Farm ||--|{ PricingPolicy : can_have
     Node {
@@ -42,10 +42,9 @@ erDiagram
         int farm_id
         int twin_id
         role role
-    }
-    Role {
-        string Node
-        string Gateway
+        string address
+        string role
+        string location
     }
     PricingPolicy {
         string name
@@ -54,10 +53,4 @@ erDiagram
         int nu
         int ipv4u
     }
-    Location {
-        string latitude
-        string longitude
-    }
-    Farm ||--|{ Location : has
-    Node ||--|{ Location : has
 ```
