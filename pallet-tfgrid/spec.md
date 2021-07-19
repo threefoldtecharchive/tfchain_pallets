@@ -27,10 +27,10 @@ Entities are links to physical human beings. Only one entity object per person c
 
 An Entity object has following fields:
 
-```json
+```js
 {
     "version": "gridVersion",
-    "id": "NumericEntityID",
+    "id": NumericEntityID,
     "name": "PersonName",
     "address": "SubstrateAccountID",
     "country_id": IdOfTheCountry,
@@ -54,10 +54,10 @@ Twins are digital copies of humain beings that control:
 A Twin object has the following fields:
 
 
-```json
+```js
 {
     "version": "gridVersion",
-    "id": "NumericTwinID",
+    "id": NumericTwinID,
     "address": "SubstrateAccountID",
     "ip": "ip4/ip6",
     "entities": ListOfEntityRelationshipProofs
@@ -72,7 +72,7 @@ A twin is an anonymous entity in substrate, if a twin wishes to make himself a k
 
 An EntityProof example:
 
-```json
+```js
 {
     "entity_id": NumericIdOfEntity,
     "signature": SignatureOfEntity (message: "entity_idTwin_id")
@@ -99,6 +99,32 @@ A farmer can have multiple nodes and can set it's prices by linking to a Pricing
 
 If a Farmer has the capability to provide public ip's to his consumers he can provide a list of ips that are available to any consumer. Public IP's can be added on Farm creation and through `addFarmIp` and `removeFarmIp`. These extrinsics again can only be called by the Farmer's keypair.
 
+A Farm object looks like following on chain:
+
+```js
+{
+    "version": "gridVersion",
+    "id": numericFarmID,
+    "name": "FarmName",
+    "twin_id": LinkedTwinNumericID,
+    "pricing_policy_id" LinkedPricingPolicyNumericID,
+    "certification_type": CertificationType(None, Bronze, Silver) TODO ALIGN WITH WIKI,
+    "country_id": IdOfTheCountry,
+    "city_id": IdOfTheCity
+    "public_ips": [PublicIP]
+}
+```
+
+Public IP Object:
+
+```js
+{
+    "ip": "someIP4string",
+    "gateway": "ip4gateway",
+    "contract_id": idOfSmartContract (not set initially)
+}
+```
+
 ## Nodes
 
 A Node is a Twin that control a physical Node. There always has to be a digital reprentation of a physical Node that belongs to a Farmer.
@@ -110,6 +136,37 @@ With this Twin's keypair a Node object should be registered, again Zero-OS is re
 This Farm ID is passed as a kernel argument on the boot process. When a Farm ID is set, only the Farm with that ID can manage this Node.
 
 When all object are properly registered on chain (Twin and Node). The Node can accept workloads and bill the consumer's wallet accordingly.
+
+A Node object has following fields:
+
+```js
+{
+    "version": "gridVersion",
+    "id": NumericNodeID,
+    "farm_id": NumericFarmID,
+    "twin_id": NumericTwinID (inferred from the signature of the extrinsic),
+    "resources": {
+        "sru": totalSru,
+        "hru": totalHru,
+        "cru": totalCru,
+        "mru": totalMru
+    },
+    "location": {
+        "latitude": "someLatValue",
+        "longitude": "someLongValue"
+    },
+    "country_id": IdOfTheCountry,
+    "city_id": IdOfTheCity,
+    "address": "SubstrateAccountID (same as the Twin who creates this Node)",
+    "role": ["Node", "Gateway"],
+    "public_config": Optional {
+        "ipv4": "publicIP4",
+        "ipv6": "publicIP6",
+        "gw4": "gatewayip4",
+        "gw6": "gatewayip6"
+    }
+}
+```
 
 ## Creating / updating / deleting objects
 
