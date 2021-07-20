@@ -99,7 +99,7 @@ A Farmer thus has a digital representation on chain of his physical Farm and Nod
 
 A farmer can have multiple nodes and can set it's prices by linking to a Pricing Policy. (TODO: will be changed to be aligned with pricing policies in the wiki)
 
-If a Farmer has the capability to provide public ip's to his consumers he can provide a list of ips that are available to any consumer. Public IP's can be added on Farm creation and through `addFarmIp` and `removeFarmIp`. These extrinsics again can only be called by the Farmer's keypair.
+If a Farmer has the capability to provide public ip's to his consumers, he can provide a list of ips that are available to any consumer. Public IP's can be added on Farm creation and through `addFarmIp` and `removeFarmIp`. These extrinsics again can only be called by the Farmer's keypair.
 
 A Farm object looks like following on chain:
 

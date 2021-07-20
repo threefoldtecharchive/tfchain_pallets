@@ -3,11 +3,27 @@
 use frame_support::traits::Vec;
 use codec::{Decode, Encode};
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Encode, Decode, Default)]
+pub struct Entity<AccountId> {
+    pub version: u32,
+    pub id: u32,
+    pub name: Vec<u8>,
+    pub account_id: AccountId,
+    pub country_id: u32,
+    pub city_id: u32,
+}
+
+//digital twin
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct PublicIP {
+pub struct Twin<AccountId> {
+    pub version: u32,
+    pub id: u32,
+    //substrate account id = public key (32 bytes)
+    //also used by PAN network
+    pub account_id: AccountId,
     pub ip: Vec<u8>,
-    pub gateway: Vec<u8>,
-    pub contract_id: u64,
+    //link to person's or companies who own this twin
+    pub entities: Vec<EntityProof>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -24,7 +40,7 @@ pub struct Farm {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct Node<AccountId> {
+pub struct Node {
     pub version: u32,
     pub id: u32,
     pub farm_id: u32,
@@ -33,11 +49,15 @@ pub struct Node<AccountId> {
     pub location: Location,
     pub country_id: u32,
     pub city_id: u32,
-    pub address: AccountId,
-    // node type (node, gateway, ..)
-    pub role: Role,
     // optional public config
     pub public_config: Option<PublicConfig>
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct PublicIP {
+    pub ip: Vec<u8>,
+    pub gateway: Vec<u8>,
+    pub contract_id: u64,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -46,18 +66,6 @@ pub struct PublicConfig {
     pub ipv6: Vec<u8>,
     pub gw4: Vec<u8>,
     pub gw6: Vec<u8>
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
-pub enum Role {
-    Node,
-    Gateway,
-}
-
-impl Default for Role {
-    fn default() -> Role {
-        Role::Node
-    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -69,31 +77,9 @@ pub struct Gateway<AccountId> {
     pub country_id: u32,
     pub city_id: u32,
     pub pub_key: Vec<u8>,
-    pub address: AccountId,
+    pub account_id: AccountId,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Encode, Decode, Default)]
-pub struct Entity<AccountId> {
-    pub version: u32,
-    pub id: u32,
-    pub name: Vec<u8>,
-    pub country_id: u32,
-    pub city_id: u32,
-    pub address: AccountId,
-}
-
-//digital twin
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct Twin<AccountId> {
-    pub version: u32,
-    pub id: u32,
-    //substrate account id = public key (32 bytes)
-    //also used by PAN network
-    pub address: AccountId,
-    pub ip: Vec<u8>,
-    //link to person's or companies who own this twin
-    pub entities: Vec<EntityProof>
-}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct EntityProof {
@@ -165,13 +151,12 @@ impl Default for CertificationCodeType {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug, Copy)]
 pub enum CertificationType {
-    None,
-    Silver,
-    Gold,
+    Diy,
+    Certified,
 }
 
 impl Default for CertificationType {
     fn default() -> CertificationType {
-        CertificationType::None
+        CertificationType::Diy
     }
 }

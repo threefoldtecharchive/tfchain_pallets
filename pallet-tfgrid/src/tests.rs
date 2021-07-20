@@ -1,11 +1,9 @@
-use crate::{Error, Module, Config};
-use frame_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
-use frame_system as system;
+use crate::{self as tfgridModule, Config, RawEvent};
+use frame_support::{assert_noop, assert_ok, construct_runtime, parameter_types};
 use sp_io::TestExternalities;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
 };
 
 use sp_core::{H256, Pair, Public, ed25519, sr25519};
@@ -23,65 +21,67 @@ pub type Signature = MultiSignature;
 
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-impl_outer_origin! {
-	pub enum Origin for TestRuntime {}
-}
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct TestRuntime;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>;
+type Block = frame_system::mocking::MockBlock<TestRuntime>;
+
+construct_runtime!(
+	pub enum TestRuntime where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		TfgridModule: tfgridModule::{Module, Call, Storage, Event<T>},
+	}
+);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
-	pub const ExistentialDeposit: u64 = 1;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
-impl system::Config for TestRuntime {
+
+impl frame_system::Config for TestRuntime {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
 	type Origin = Origin;
 	type Index = u64;
-	type Call = ();
+	type Call = Call;
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = AccountId;
+	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type PalletInfo = ();
-	type AccountData = balances::AccountData<u64>;
+	type PalletInfo = PalletInfo;
+	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl Config for TestRuntime {
-	type Event = ();
+	type Event = Event;
 }
-
 
 struct ExternalityBuilder;
 
 impl ExternalityBuilder {
 	pub fn build() -> TestExternalities {
-		let storage = system::GenesisConfig::default()
+		let storage = frame_system::GenesisConfig::default()
 			.build_storage::<TestRuntime>()
 			.unwrap();
-		TestExternalities::from(storage)
+		let mut ext = TestExternalities::from(storage);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
-
-pub type TemplateModule = Module<TestRuntime>;
-
 type AccountPublic = <MultiSignature as Verify>::Signer;
 
 
@@ -165,7 +165,8 @@ fn test_create_entity_works() {
 
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
+		let a = Origin::signed(1);
+		assert_ok!(TfgridModule::create_entity(Origin::signed(1), a, name.as_bytes().to_vec(), 0,0, signature));
 	});
 }
 
@@ -176,12 +177,12 @@ fn test_update_entity_works() {
 
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
 
 		// Change name to barfoo
 		name = "barfoo";
 
-		assert_ok!(TemplateModule::update_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
+		assert_ok!(TfgridModule::update_entity(Origin::signed(test_ed25519()), name.as_bytes().to_vec(), 0,0));
 	});
 }
 
@@ -192,14 +193,14 @@ fn test_update_entity_fails_if_signed_by_someone_else() {
 
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature));
 		
 		// Change name to barfoo
 		name = "barfoo";
 
 		assert_noop!(
-			TemplateModule::update_entity(Origin::signed(bob()), name.as_bytes().to_vec(), 0,0),
-			Error::<TestRuntime>::EntityNotExists
+			TfgridModule::update_entity(Origin::signed(bob()), name.as_bytes().to_vec(), 0,0),
+			Err::<TestRuntime>::EntityNotExists
 		);
 	});
 }
@@ -211,11 +212,11 @@ fn test_create_entity_double_fails() {
 
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		assert_noop!(
-			TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature),
-			Error::<TestRuntime>::EntityWithNameExists
+			TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature),
+			TfgridModule::Error::EntityWithNameExists
 		);
 	});
 }
@@ -227,14 +228,14 @@ fn test_create_entity_double_fails_with_same_pubkey() {
 
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		name = "barfoo";
 
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
 		assert_noop!(
-			TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature),
+			TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature),
 			Error::<TestRuntime>::EntityWithPubkeyExists
 		);
 	});
@@ -247,9 +248,9 @@ fn test_delete_entity_works() {
 
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
-		assert_ok!(TemplateModule::delete_entity(Origin::signed(test_ed25519())));
+		assert_ok!(TfgridModule::delete_entity(Origin::signed(test_ed25519())));
 	});
 }
 
@@ -259,10 +260,10 @@ fn test_delete_entity_fails_if_signed_by_someone_else() {
 		let name = "foobar";
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		assert_noop!(
-			TemplateModule::delete_entity(Origin::signed(bob())),
+			TfgridModule::delete_entity(Origin::signed(bob())),
 			Error::<TestRuntime>::EntityNotExists
 		);
 	});
@@ -272,7 +273,7 @@ fn test_delete_entity_fails_if_signed_by_someone_else() {
 fn test_create_twin_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(test_ed25519()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(test_ed25519()), ip.as_bytes().to_vec()));
 	});
 }
 
@@ -280,10 +281,10 @@ fn test_create_twin_works() {
 fn test_delete_twin_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
-		assert_ok!(TemplateModule::delete_twin(Origin::signed(alice()), twin_id));
+		assert_ok!(TfgridModule::delete_twin(Origin::signed(alice()), twin_id));
 	});
 }
 
@@ -295,11 +296,11 @@ fn test_add_entity_to_twin() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		// Bob creates an anonymous twin
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Signature of the entityid (1) and twinid (1) signed with test_ed25519 account
 		let signature = sign_add_entity_to_twin(1, 1);
@@ -308,7 +309,7 @@ fn test_add_entity_to_twin() {
 		let entity_id = 1;
 		
 		// Bob adds someone as entity to his twin
-		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature));
+		assert_ok!(TfgridModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature));
 	});
 }
 
@@ -320,10 +321,10 @@ fn test_add_entity_to_twin_fails_with_invalid_signature() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Add Alice as entity to bob's twin
 
@@ -334,7 +335,7 @@ fn test_add_entity_to_twin_fails_with_invalid_signature() {
 		let entity_id = 1;
 		
 		assert_noop!(
-			TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature),
+			TfgridModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature),
 			Error::<TestRuntime>::EntitySignatureDoesNotMatch
 		);
 	});
@@ -348,10 +349,10 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()));
 
 		// Add Alice as entity to bob's twin
 
@@ -361,10 +362,10 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 		let twin_id = 1;
 		let entity_id = 1;
 		
-		assert_ok!(TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.clone()));
+		assert_ok!(TfgridModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature.clone()));
 		
 		assert_noop!(
-			TemplateModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature),
+			TfgridModule::add_twin_entity(Origin::signed(bob()), twin_id, entity_id, signature),
 			Error::<TestRuntime>::EntityWithSignatureAlreadyExists
 		);
 	});
@@ -374,10 +375,10 @@ fn test_add_entity_to_twin_fails_if_entity_is_added_twice() {
 fn test_create_twin_double_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		// Second time creating twin succeeds
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 	});
 }
 
@@ -389,10 +390,10 @@ fn test_create_farm_works() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 
@@ -409,7 +410,7 @@ fn test_create_farm_works() {
 			pricing_policy_id: 0,
 		};
 
-		assert_ok!(TemplateModule::create_farm(Origin::signed(alice()), farm));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm));
 	});
 }
 
@@ -417,11 +418,11 @@ fn test_create_farm_works() {
 fn test_update_twin_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let mut ip = "some_ip";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 		ip = "some_other_ip";
-		assert_ok!(TemplateModule::update_twin(Origin::signed(alice()), twin_id, ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::update_twin(Origin::signed(alice()), twin_id, ip.as_bytes().to_vec()));
 	});
 }
 
@@ -429,12 +430,12 @@ fn test_update_twin_works() {
 fn test_update_twin_fails_if_signed_by_someone_else() {
 	ExternalityBuilder::build().execute_with(|| {
 		let mut ip = "some_ip";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 		ip = "some_other_ip";
 		assert_noop!(
-			TemplateModule::update_twin(Origin::signed(bob()), twin_id, ip.as_bytes().to_vec()),
+			TfgridModule::update_twin(Origin::signed(bob()), twin_id, ip.as_bytes().to_vec()),
 			Error::<TestRuntime>::TwinNotExists
 		);
 	});
@@ -462,7 +463,7 @@ fn test_update_twin_fails_if_signed_by_someone_else() {
 
 // 		// Create farm with invalid entity-id
 // 		assert_noop!(
-// 			TemplateModule::create_farm(Origin::signed(alice()), farm),
+// 			TfgridModule::create_farm(Origin::signed(alice()), farm),
 // 			Error::<TestRuntime>::EntityNotExists
 // 		);
 // 	});
@@ -477,7 +478,7 @@ fn test_create_farm_with_invalid_twin_id_fails() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 		
 		let twin_id = 5342433;
 
@@ -494,7 +495,7 @@ fn test_create_farm_with_invalid_twin_id_fails() {
 
 		// Create farm with invalid twin-id
 		assert_noop!(
-			TemplateModule::create_farm(Origin::signed(alice()), farm),
+			TfgridModule::create_farm(Origin::signed(alice()), farm),
 			Error::<TestRuntime>::TwinNotExists
 		);
 	});
@@ -508,10 +509,10 @@ fn test_create_farm_with_same_name_fails() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 
@@ -528,10 +529,10 @@ fn test_create_farm_with_same_name_fails() {
 			pricing_policy_id: 0,
 		};
 
-		assert_ok!(TemplateModule::create_farm(Origin::signed(alice()), farm.clone()));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm.clone()));
 
 		assert_noop!(
-			TemplateModule::create_farm(Origin::signed(alice()), farm),
+			TfgridModule::create_farm(Origin::signed(alice()), farm),
 			Error::<TestRuntime>::FarmExists
 		);
 	});
@@ -545,10 +546,10 @@ fn create_node_works() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 
@@ -565,7 +566,7 @@ fn create_node_works() {
 			pricing_policy_id: 0,
 		};
 
-		assert_ok!(TemplateModule::create_farm(Origin::signed(alice()), farm));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm));
 
 		// random location
 		let location = super::types::Location{
@@ -593,7 +594,7 @@ fn create_node_works() {
 			role: super::types::Role::Node,
 		};
 
-		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node));
+		assert_ok!(TfgridModule::create_node(Origin::signed(alice()), node));
 	});
 }
 
@@ -605,10 +606,10 @@ fn create_node_with_same_pubke_fails() {
 		// Someone first creates an entity
 		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
 
-		assert_ok!(TemplateModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
 
 		let ip = "10.2.3.3";
-		assert_ok!(TemplateModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
 
 		let twin_id = 1;
 
@@ -625,7 +626,7 @@ fn create_node_with_same_pubke_fails() {
 			pricing_policy_id: 0,
 		};
 
-		assert_ok!(TemplateModule::create_farm(Origin::signed(alice()), farm));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm));
 
 		// random location
 		let location = super::types::Location{
@@ -653,10 +654,10 @@ fn create_node_with_same_pubke_fails() {
 			role: super::types::Role::Node,
 		};
 
-		assert_ok!(TemplateModule::create_node(Origin::signed(alice()), node.clone()));
+		assert_ok!(TfgridModule::create_node(Origin::signed(alice()), node.clone()));
 
 		assert_noop!(
-			TemplateModule::create_node(Origin::signed(alice()), node),
+			TfgridModule::create_node(Origin::signed(alice()), node),
 			Error::<TestRuntime>::NodeWithPubkeyExists
 		);
 	});
