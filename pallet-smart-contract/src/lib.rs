@@ -57,7 +57,8 @@ decl_error! {
 		TwinNotAuthorizedToCancelContract,
 		NodeNotAuthorizedToDeployContract,
 		NodeNotAuthorizedToComputeReport,
-		PricingPolicyNotExists
+		PricingPolicyNotExists,
+		ContractIsNotUnique
 	}
 }
 
@@ -113,7 +114,9 @@ decl_storage! {
 	trait Store for Module<T: Config> as SmartContractModule {
         pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => NodeContract;
 		pub ContractBillingInformationByID get(fn contract_billing_information_by_id): map hasher(blake2_128_concat) u64 => ContractBillingInformation;
-		pub ContractIDByHash get(fn node_contract_by_hash): map hasher(blake2_128_concat) Vec<u8> => u64;
+		// ContractIDByNodeIDAndHash is a mapping for a contract ID by supplying a node_id and a deployment_hash
+		// this combination makes a deployment for a user / node unique
+		pub ContractIDByNodeIDAndHash get(fn node_contract_by_hash): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) Vec<u8> => u64;
 		pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) ContractState => Vec<NodeContract>;
 		pub ContractsToBillAt get(fn ip_expires_at): map hasher(blake2_128_concat) u64 => Vec<u64>;
         ContractID: u64;
@@ -167,6 +170,7 @@ impl<T: Config> Module<T> {
 		let mut id = ContractID::get();
 		id = id+1;
 		
+		ensure!(!ContractIDByNodeIDAndHash::contains_key(node_id, &deployment_hash), Error::<T>::ContractIsNotUnique);
 		ensure!(pallet_tfgrid::TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
 		let twin_id = pallet_tfgrid::TwinIdByAccountID::<T>::get(&account_id);
 		let twin = pallet_tfgrid::Twins::<T>::get(twin_id);
@@ -199,7 +203,7 @@ impl<T: Config> Module<T> {
         Contracts::insert(id, &contract);
         ContractID::put(id);
 		ContractBillingInformationByID::insert(id, contract_billing_information);
-		ContractIDByHash::insert(deployment_hash, id);
+		ContractIDByNodeIDAndHash::insert(node_id, deployment_hash, id);
 		
 		let mut node_contracts = NodeContracts::get(&contract.node_id, &contract.state);
 		node_contracts.push(contract.clone());
@@ -238,7 +242,7 @@ impl<T: Config> Module<T> {
 		}
 
 		// remove the contract by hash from storage
-		ContractIDByHash::remove(&contract.deployment_hash);
+		ContractIDByNodeIDAndHash::remove(contract.node_id, &contract.deployment_hash);
 
 		Self::_update_contract_state(contract, ContractState::Deleted)?;
 
