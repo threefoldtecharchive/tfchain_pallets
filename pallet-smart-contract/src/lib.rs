@@ -113,6 +113,7 @@ decl_storage! {
 	trait Store for Module<T: Config> as SmartContractModule {
         pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => NodeContract;
 		pub ContractBillingInformationByID get(fn contract_billing_information_by_id): map hasher(blake2_128_concat) u64 => ContractBillingInformation;
+		pub ContractIDByHash get(fn node_contract_by_hash): map hasher(blake2_128_concat) Vec<u8> => u64;
 		pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) ContractState => Vec<NodeContract>;
 		pub ContractsToBillAt get(fn ip_expires_at): map hasher(blake2_128_concat) u64 => Vec<u64>;
         ContractID: u64;
@@ -178,7 +179,7 @@ impl<T: Config> Module<T> {
 			contract_id: id,
 			node_id,
 			deployment_data,
-			deployment_hash,
+			deployment_hash: deployment_hash.clone(),
 			public_ips,
 			twin_id,
 			state: ContractState::Created,
@@ -198,6 +199,7 @@ impl<T: Config> Module<T> {
         Contracts::insert(id, &contract);
         ContractID::put(id);
 		ContractBillingInformationByID::insert(id, contract_billing_information);
+		ContractIDByHash::insert(deployment_hash, id);
 		
 		let mut node_contracts = NodeContracts::get(&contract.node_id, &contract.state);
 		node_contracts.push(contract.clone());
@@ -234,6 +236,9 @@ impl<T: Config> Module<T> {
 		if contract.public_ips > 0 {
 			Self::_free_ip(&mut contract)?
 		}
+
+		// remove the contract by hash from storage
+		ContractIDByHash::remove(&contract.deployment_hash);
 
 		Self::_update_contract_state(contract, ContractState::Deleted)?;
 

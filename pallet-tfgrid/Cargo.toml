@@ -5,7 +5,7 @@ edition = '2018'
 homepage = 'https://threefold.io'
 license = 'Apache'
 name = 'pallet-tfgrid'
-repository = 'https://github.com/threefoldtech/substrate-pallets'
+repository = 'https://github.com/threefoldtech/tfchain_pallets'
 version = '3.0.0'
 
 [package.metadata.docs.rs]
