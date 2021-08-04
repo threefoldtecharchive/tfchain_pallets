@@ -17,6 +17,9 @@ use pallet_tfgrid::types;
 
 use substrate_fixed::types::{U64F64};
 
+#[cfg(test)]
+mod tests;
+
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 	type Currency: Currency<Self::AccountId>;
@@ -400,6 +403,28 @@ impl<T: Config> Module<T> {
 			if total as u128 >= balances_as_u128 {
 				decomission = true;				
 			}
+
+			let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+			// calculate amount due on a monthly basis
+			// we bill every one minute so we do 60 * 24 * 12
+			let amount_due_monthly = amount_due_as_u128 * 60 * 24 * 12;
+			// see how many months a user can pay for this deployment given his balance
+			let discount_level = U64F64::from_num(balances_as_u128) / U64F64::from_num(amount_due_monthly);
+    
+			// predefined discount levels
+			// https://wiki.threefold.io/#/threefold__grid_pricing
+			let discount = match discount_level.ceil().to_num::<u64>() {
+				d if d >= 3 && d < 6 => U64F64::from_num(0.2),
+				d if d >= 6 && d < 12 => U64F64::from_num(0.3),
+				d if d >= 12 && d < 36 => U64F64::from_num(0.4),
+				d if d >= 36 => U64F64::from_num(0.6),
+				_ => U64F64::from_num(1),
+			};
+			
+			// calculate the new amount due given the discount
+			let amount_due = U64F64::from_num(amount_due_as_u128) * discount;
+			// convert to balance object
+			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(amount_due.ceil().to_num::<u64>());
 
 			// fetch source twin
 			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
