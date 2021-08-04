@@ -41,7 +41,6 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 	pub const ExistentialDeposit: u64 = 1;
-    pub const MinimumPeriod: u64 = 1;
 }
 
 impl frame_system::Config for TestRuntime {
@@ -86,7 +85,7 @@ impl pallet_tfgrid::Config for TestRuntime {
 impl pallet_timestamp::Config for TestRuntime {
 	type Moment = Moment;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ();
 	type WeightInfo = pallet_timestamp::weights::SubstrateWeight<TestRuntime>;
 }
 
@@ -123,7 +122,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<TestRuntime>().unwrap();
 	let genesis = pallet_balances::GenesisConfig::<TestRuntime> {
 		balances: vec![
-			(alice(), 100),
+			(alice(), 1000000000000),
+            (bob(), 2500000000),
 		],
 	};
 	genesis.assimilate_storage(&mut t).unwrap();

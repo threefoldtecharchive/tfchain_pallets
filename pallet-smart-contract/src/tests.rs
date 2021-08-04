@@ -1,5 +1,8 @@
 use crate::{mock::*, Error};
-use frame_support::{assert_ok, assert_noop};
+use frame_support::{assert_noop, assert_ok, traits::{OnFinalize, OnInitialize}};
+use sp_runtime::{
+	traits::SaturatedConversion,
+};
 
 #[test]
 fn test_create_contract_works() {
@@ -112,6 +115,61 @@ fn test_cancel_contract_wrong_twins_fails() {
 	});
 }
 
+#[test]
+fn test_push_consumption_report_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+		run_to_block(1);
+
+		Timestamp::set_timestamp(1628082000);
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+
+		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
+		assert_eq!(contract_billing_info.last_updated, 1628082);
+
+		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(11);
+		assert_eq!(contract_to_bill, [1]);
+		
+		Timestamp::set_timestamp(1628082048);
+		let mut consumption_reports = Vec::new();
+		consumption_reports.push(super::Consumption{
+			contract_id: 1,
+			cru: 1,
+			hru: 0,
+			mru: 4,
+			sru: 1000000,
+			nru: 500,
+			timestamp: 1628082048
+		});
+
+		assert_ok!(SmartContractModule::add_reports(Origin::signed(alice()), consumption_reports));
+
+		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
+		assert_eq!(contract_billing_info.amount_unbilled, 1009988);
+
+		// let mature 10 blocks
+		// because we bill every 10 blocks
+		run_to_block(12);
+
+		// check the farmer twins account and see if it got balanced debited
+		let twin = TfgridModule::twins(1);
+		let b = Balances::free_balance(&twin.account_id);
+		let balances_as_u128: u128 = b.saturated_into::<u128>();
+		assert_eq!(balances_as_u128, 1000001009988);
+
+		// check the contract owners address to see if it got balance credited
+		let twin = TfgridModule::twins(2);
+		let b = Balances::free_balance(&twin.account_id);
+		let balances_as_u128: u128 = b.saturated_into::<u128>();
+		assert_eq!(balances_as_u128, 2498990012);
+
+		// amount unbilled should have been reset after a transfer between contract owner and farmer
+		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
+		assert_eq!(contract_billing_info.amount_unbilled, 0);
+	});
+}
+
 fn prepare_farm_and_node() {
 	let ip = "10.2.3.3";
 	TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()).unwrap();
@@ -126,8 +184,10 @@ fn prepare_farm_and_node() {
 		gateway: "1.1.1.1".as_bytes().to_vec(),
 		contract_id: 0
 	});
-	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 0, super::types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
 
+	TfgridModule::create_pricing_policy(Origin::signed(alice()), "policy_1".as_bytes().to_vec(), super::types::Unit::Gigabytes, 200, 100, 100, 500).unwrap();
+
+	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 1, super::types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
 
 	// random location
 	let location = super::types::Location{
@@ -143,4 +203,14 @@ fn prepare_farm_and_node() {
 	};
 
 	TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, 0, 0, None).unwrap();
+}
+
+fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		SmartContractModule::on_finalize(System::block_number());
+		System::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		System::on_initialize(System::block_number());
+		SmartContractModule::on_initialize(System::block_number());
+	}
 }
