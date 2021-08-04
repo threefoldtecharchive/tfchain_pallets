@@ -128,7 +128,7 @@ fn test_push_consumption_report_works() {
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
 		assert_eq!(contract_billing_info.last_updated, 1628082);
 
-		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(11);
+		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(61);
 		assert_eq!(contract_to_bill, [1]);
 		
 		Timestamp::set_timestamp(1628082048);
@@ -150,7 +150,7 @@ fn test_push_consumption_report_works() {
 
 		// let mature 10 blocks
 		// because we bill every 10 blocks
-		run_to_block(12);
+		run_to_block(62);
 
 		// check the farmer twins account and see if it got balanced debited
 		let twin = TfgridModule::twins(1);

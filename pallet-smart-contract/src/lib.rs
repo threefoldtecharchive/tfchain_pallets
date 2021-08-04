@@ -29,6 +29,8 @@ pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Con
 }
 
 pub const CONTRACT_VERSION: u32 = 1;
+// when a contract needs to be billed frequency
+pub const BILLING_FREQUENCY_IN_BLOCKS: u64 = 60;
 
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
@@ -371,22 +373,23 @@ impl<T: Config> Module<T> {
 
 		for contract_id in contracts {
 			let mut contract = Contracts::get(contract_id);
+
 			if contract.state != ContractState::Created {
 				continue
 			}
-			let mut contract_billing_info = ContractBillingInformationByID::get(contract_id);
-			
+
 			let node = pallet_tfgrid::Nodes::get(contract.node_id);
-			
 			ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
+
 			let farm = pallet_tfgrid::Farms::get(node.farm_id);
-			
 			ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
+
 			let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
 			
 			// bill user for 1 hour ip usage (10 blocks * 6 seconds)
-			let total_ip_cost = contract.public_ips * pricing_policy.ipu * (10 * 6);
-
+			let total_ip_cost = contract.public_ips * pricing_policy.ipu * (BILLING_FREQUENCY_IN_BLOCKS as u32 * 6);
+			
+			let mut contract_billing_info = ContractBillingInformationByID::get(contract_id);
 			let total = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
 
 			if total == 0 {
@@ -483,8 +486,8 @@ impl<T: Config> Module<T> {
 	pub fn _reinsert_contract_to_bill(contract_id: u64) -> DispatchResult {
 		// Save the contract
 		let now = <frame_system::Module<T>>::block_number().saturated_into::<u64>();
-		// Save the contract to be billed in 10 blocks
-		let future_block = now + 10;
+		// Save the contract to be billed in X blocks
+		let future_block = now + BILLING_FREQUENCY_IN_BLOCKS;
 		let mut contracts = ContractsToBillAt::get(future_block);
 		contracts.push(contract_id);
 		ContractsToBillAt::insert(future_block, &contracts);
