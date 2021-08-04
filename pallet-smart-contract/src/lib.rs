@@ -59,7 +59,7 @@ decl_error! {
 		FailedToReserveIP,
 		FailedToFreeIPs,
 		ContractNotExists,
-		TwinNotAuthorizedToCreateContract,
+		TwinNotAuthorizedToUpdateContract,
 		TwinNotAuthorizedToCancelContract,
 		NodeNotAuthorizedToDeployContract,
 		NodeNotAuthorizedToComputeReport,
@@ -173,17 +173,14 @@ decl_module! {
 
 impl<T: Config> Module<T> {
 	pub fn _create_contract(account_id: T::AccountId, node_id: u32, deployment_data: Vec<u8>, deployment_hash: Vec<u8>, public_ips: u32) -> DispatchResult {
+		ensure!(!ContractIDByNodeIDAndHash::contains_key(node_id, &deployment_hash), Error::<T>::ContractIsNotUnique);
+		ensure!(pallet_tfgrid::TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
+		ensure!(pallet_tfgrid::Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
+
 		let mut id = ContractID::get();
 		id = id+1;
 		
-		ensure!(!ContractIDByNodeIDAndHash::contains_key(node_id, &deployment_hash), Error::<T>::ContractIsNotUnique);
-		ensure!(pallet_tfgrid::TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
 		let twin_id = pallet_tfgrid::TwinIdByAccountID::<T>::get(&account_id);
-		let twin = pallet_tfgrid::Twins::<T>::get(twin_id);
-		ensure!(twin.account_id == account_id, Error::<T>::TwinNotAuthorizedToCreateContract);
-
-		ensure!(pallet_tfgrid::Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
-
 		let mut contract = NodeContract {
 			version: CONTRACT_VERSION,
 			contract_id: id,
@@ -225,7 +222,7 @@ impl<T: Config> Module<T> {
 
 		let mut contract = Contracts::get(contract_id);
 		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-		ensure!(twin.account_id == account_id, Error::<T>::TwinNotAuthorizedToCancelContract);
+		ensure!(twin.account_id == account_id, Error::<T>::TwinNotAuthorizedToUpdateContract);
 
 		contract.deployment_data = deployment_data;
 		contract.deployment_hash = deployment_hash;

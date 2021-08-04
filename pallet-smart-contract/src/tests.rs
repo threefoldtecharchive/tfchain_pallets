@@ -1,5 +1,5 @@
-use crate::{mock::*};
-use frame_support::{assert_ok};
+use crate::{mock::*, Error};
+use frame_support::{assert_ok, assert_noop};
 
 #[test]
 fn test_create_contract_works() {
@@ -10,9 +10,114 @@ fn test_create_contract_works() {
 	});
 }
 
+#[test]
+fn test_create_contract_with_undefined_node_fails() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_noop!(
+			SmartContractModule::create_contract(Origin::signed(alice()), 2, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0),
+			Error::<TestRuntime>::NodeNotExists
+		);
+	});
+}
+
+
+#[test]
+fn test_create_contract_with_same_hash_and_node_fails() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+
+		assert_noop!(
+			SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0),
+			Error::<TestRuntime>::ContractIsNotUnique
+		);
+	});
+}
+
+#[test]
+fn test_update_contract_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+
+		assert_ok!(SmartContractModule::update_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()));
+	});
+}
+
+#[test]
+fn test_update_contract_not_exists_fails() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_noop!(
+			SmartContractModule::update_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()),
+			Error::<TestRuntime>::ContractNotExists
+		);
+	});
+}
+
+#[test]
+fn test_update_contract_wrong_twins_fails() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+
+		assert_noop!(
+			SmartContractModule::update_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()),
+			Error::<TestRuntime>::TwinNotAuthorizedToUpdateContract
+		);
+	});
+}
+
+
+#[test]
+fn test_cancel_contract_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+
+		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
+	});
+}
+
+#[test]
+fn test_cancel_contract_not_exists_fails() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_noop!(
+			SmartContractModule::cancel_contract(Origin::signed(alice()), 1),
+			Error::<TestRuntime>::ContractNotExists
+		);
+	});
+}
+
+#[test]
+fn test_cancel_contract_wrong_twins_fails() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+
+		assert_noop!(
+			SmartContractModule::cancel_contract(Origin::signed(bob()), 1),
+			Error::<TestRuntime>::TwinNotAuthorizedToCancelContract
+		);
+	});
+}
+
 fn prepare_farm_and_node() {
 	let ip = "10.2.3.3";
 	TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()).unwrap();
+
+	let ip = "10.2.3.3";
+	TfgridModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()).unwrap();
 
 	let farm_name = "test_farm";
 	let mut pub_ips = Vec::new();

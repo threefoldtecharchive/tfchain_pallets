@@ -115,6 +115,10 @@ pub fn alice() -> AccountId {
 	get_account_id_from_seed::<sr25519::Public>("Alice")
 }
 
+pub fn bob() -> AccountId {
+	get_account_id_from_seed::<sr25519::Public>("Bob")
+}
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<TestRuntime>().unwrap();
 	let genesis = pallet_balances::GenesisConfig::<TestRuntime> {
