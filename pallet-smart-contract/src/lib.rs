@@ -18,6 +18,9 @@ use pallet_tfgrid::types;
 use substrate_fixed::types::{U64F64};
 
 #[cfg(test)]
+mod mock;
+
+#[cfg(test)]
 mod tests;
 
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
