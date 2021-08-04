@@ -45,6 +45,7 @@ decl_event!(
 		IPsFreed(u64, Vec<Vec<u8>>),
 		ContractDeployed(u64, AccountId),
 		ConsumptionReportReceived(Consumption),
+		ContractBilled(u64, Vec<u8>, u128),
 	}
 );
 
@@ -393,8 +394,6 @@ impl<T: Config> Module<T> {
 				continue
 			}
 
-			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(total);
-
 			// get the contracts free balance
 			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 			let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
@@ -408,27 +407,7 @@ impl<T: Config> Module<T> {
 				decomission = true;				
 			}
 
-			let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
-			// calculate amount due on a monthly basis
-			// we bill every one minute so we do 60 * 24 * 12
-			let amount_due_monthly = amount_due_as_u128 * 60 * 24 * 12;
-			// see how many months a user can pay for this deployment given his balance
-			let discount_level = U64F64::from_num(balances_as_u128) / U64F64::from_num(amount_due_monthly);
-    
-			// predefined discount levels
-			// https://wiki.threefold.io/#/threefold__grid_pricing
-			let discount = match discount_level.ceil().to_num::<u64>() {
-				d if d >= 3 && d < 6 => U64F64::from_num(0.2),
-				d if d >= 6 && d < 12 => U64F64::from_num(0.3),
-				d if d >= 12 && d < 36 => U64F64::from_num(0.4),
-				d if d >= 36 => U64F64::from_num(0.6),
-				_ => U64F64::from_num(1),
-			};
-			
-			// calculate the new amount due given the discount
-			let amount_due = U64F64::from_num(amount_due_as_u128) * discount;
-			// convert to balance object
-			let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(amount_due.ceil().to_num::<u64>());
+			let (amount_due, discount_received) = Self::_calculate_discount(BalanceOf::<T>::saturated_from(total), balances_as_u128);
 
 			// fetch source twin
 			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
@@ -438,6 +417,9 @@ impl<T: Config> Module<T> {
 			// Transfer currency to the farmers account
 			T::Currency::transfer(&twin.account_id, &farmer_twin.account_id, amount_due, AllowDeath)
 				.map_err(|_| DispatchError::Other("Can't make transfer"))?;
+
+			let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+			Self::deposit_event(RawEvent::ContractBilled(contract.contract_id, discount_received.as_bytes().to_vec(), amount_due_as_u128));
 
 			if decomission {
 				if contract.public_ips > 0 {
@@ -454,6 +436,48 @@ impl<T: Config> Module<T> {
 			Self::_reinsert_contract_to_bill(contract.contract_id)?;
 		}
 		Ok(())
+	}
+
+	fn _calculate_discount(amount_due: BalanceOf<T>, balance: u128) -> (BalanceOf<T>, &'static str) {
+		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+		// calculate amount due on a monthly basis
+		// we bill every one minute so we do 60 * 24 * 12
+		let amount_due_monthly = amount_due_as_u128 * 60 * 24 * 12;
+		// see how many months a user can pay for this deployment given his balance
+		let discount_level = U64F64::from_num(balance) / U64F64::from_num(amount_due_monthly);
+
+		let discount_received;
+		// predefined discount levels
+		// https://wiki.threefold.io/#/threefold__grid_pricing
+		let discount = match discount_level.ceil().to_num::<u64>() {
+			d if d >= 3 && d < 6 => {
+				discount_received = "default";
+				U64F64::from_num(0.2)
+			},
+			d if d >= 6 && d < 12 => {
+				discount_received = "bronze";
+				U64F64::from_num(0.3)
+			},
+			d if d >= 12 && d < 36 => {
+				discount_received = "silver";
+				U64F64::from_num(0.4)
+			},
+			d if d >= 36 => {
+				discount_received = "gold";
+				U64F64::from_num(0.6)
+			}
+			_ => {
+				discount_received = "none";
+				U64F64::from_num(1)
+			},
+		};
+		
+		// calculate the new amount due given the discount
+		let amount_due = U64F64::from_num(amount_due_as_u128) * discount;
+		// convert to balance object
+		let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(amount_due.ceil().to_num::<u64>());
+
+		(amount_due, discount_received)
 	}
 
 	pub fn _reinsert_contract_to_bill(contract_id: u64) -> DispatchResult {
