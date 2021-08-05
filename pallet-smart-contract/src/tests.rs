@@ -1,4 +1,4 @@
-use crate::{mock::*, Error};
+use crate::{mock::*, Error, RawEvent};
 use frame_support::{assert_noop, assert_ok, traits::{OnFinalize, OnInitialize}};
 use sp_runtime::{
 	traits::SaturatedConversion,
@@ -154,6 +154,25 @@ fn test_push_consumption_report_works() {
 		// let mature 10 blocks
 		// because we bill every 10 blocks
 		run_to_block(62);
+
+		// Test that the expected events were emitted
+		let our_events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| {
+			if let Event::pallet_smart_contract(inner) = e {
+				Some(inner)
+			} else {
+				None
+			}
+		})
+		.collect::<Vec<_>>();
+
+		let expected_events = vec![
+			RawEvent::ContractBilled(1, "gold".as_bytes().to_vec(), 2),
+		];
+
+		assert_eq!(our_events[2], expected_events[0]);
 
 		// check the farmer twins account and see if it got balanced debited
 		let twin = TfgridModule::twins(1);
