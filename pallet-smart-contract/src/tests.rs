@@ -121,17 +121,16 @@ fn test_push_consumption_report_works() {
 		prepare_farm_and_node();
 		run_to_block(1);
 
-		Timestamp::set_timestamp(1628082000);
+		Timestamp::set_timestamp(1628082000 * 1000);
 
 		assert_ok!(SmartContractModule::create_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-		assert_eq!(contract_billing_info.last_updated, 1628082);
+		assert_eq!(contract_billing_info.last_updated, 1628082000);
 
 		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(61);
 		assert_eq!(contract_to_bill, [1]);
 		
-		Timestamp::set_timestamp(1628082048);
 		let mut consumption_reports = Vec::new();
 		consumption_reports.push(super::Consumption{
 			contract_id: 1,
@@ -140,13 +139,17 @@ fn test_push_consumption_report_works() {
 			mru: 4,
 			sru: 1000000,
 			nru: 500,
-			timestamp: 1628082048
+			timestamp: 1628085600
 		});
+
+		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
+		let seconds_elapsed = 1628085600 - contract_billing_info.last_updated;
+		assert_eq!(seconds_elapsed, 3600);
 
 		assert_ok!(SmartContractModule::add_reports(Origin::signed(alice()), consumption_reports));
 
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-		assert_eq!(contract_billing_info.amount_unbilled, 1009988);
+		assert_eq!(contract_billing_info.amount_unbilled, 3);
 
 		// let mature 10 blocks
 		// because we bill every 10 blocks
@@ -156,13 +159,13 @@ fn test_push_consumption_report_works() {
 		let twin = TfgridModule::twins(1);
 		let b = Balances::free_balance(&twin.account_id);
 		let balances_as_u128: u128 = b.saturated_into::<u128>();
-		assert_eq!(balances_as_u128, 1000001009988);
+		assert_eq!(balances_as_u128, 1000000000002);
 
 		// check the contract owners address to see if it got balance credited
 		let twin = TfgridModule::twins(2);
 		let b = Balances::free_balance(&twin.account_id);
 		let balances_as_u128: u128 = b.saturated_into::<u128>();
-		assert_eq!(balances_as_u128, 2498990012);
+		assert_eq!(balances_as_u128, 2499999998);
 
 		// amount unbilled should have been reset after a transfer between contract owner and farmer
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
