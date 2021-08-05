@@ -10,10 +10,9 @@ use sp_runtime::{
 	DispatchResult, DispatchError,
 	traits::SaturatedConversion,
 };
-use codec::{Decode, Encode};
 use pallet_tfgrid;
 use pallet_timestamp as timestamp;
-use pallet_tfgrid::types;
+use pallet_tfgrid::types as pallet_tfgrid_types;
 
 use substrate_fixed::types::{U64F64};
 
@@ -22,6 +21,8 @@ mod mock;
 
 #[cfg(test)]
 mod tests;
+
+pub mod types;
 
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
@@ -40,13 +41,13 @@ decl_event!(
     where
         AccountId = <T as frame_system::Config>::AccountId,
     {
-		ContractCreated(NodeContract),
-		ContractUpdated(NodeContract),
-		IPsReserved(u64, Vec<types::PublicIP>),
+		ContractCreated(types::NodeContract),
+		ContractUpdated(types::NodeContract),
+		IPsReserved(u64, Vec<pallet_tfgrid_types::PublicIP>),
 		ContractCanceled(u64),
 		IPsFreed(u64, Vec<Vec<u8>>),
 		ContractDeployed(u64, AccountId),
-		ConsumptionReportReceived(Consumption),
+		ConsumptionReportReceived(types::Consumption),
 		ContractBilled(u64, Vec<u8>, u128),
 	}
 );
@@ -71,62 +72,16 @@ decl_error! {
 	}
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct NodeContract {
-	version: u32,
-	contract_id: u64,
-	twin_id: u32,
-	node_id: u32,
-	// deployment_data is the encrypted deployment body. This encrypted the deployment with the **USER** public key. 
-	// So only the user can read this data later on (or any other key that he keeps safe).
-    // this data part is read only by the user and can actually hold any information to help him reconstruct his deployment or can be left empty.
-	deployment_data: Vec<u8>,
-	// Hash of the deployment, set by the user
-	deployment_hash: Vec<u8>,
-    public_ips: u32,
-	state: ContractState,
-	public_ips_list: Vec<types::PublicIP>,
-}
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct ContractBillingInformation {
-	previous_nu_reported: u64,
-	last_updated: u64,
-	amount_unbilled: u64,
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
-pub enum ContractState {
-	Created,
-	Deleted,
-	OutOfFunds,
-}
-
-impl Default for ContractState {
-	fn default() -> ContractState {
-		ContractState::Created
-	}
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct Consumption {
-	contract_id: u64,
-	timestamp: u64,
-	cru: u64,
-	sru: u64,
-	hru: u64,
-	mru: u64,
-	nru: u64
-}
 
 decl_storage! {
 	trait Store for Module<T: Config> as SmartContractModule {
-        pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => NodeContract;
-		pub ContractBillingInformationByID get(fn contract_billing_information_by_id): map hasher(blake2_128_concat) u64 => ContractBillingInformation;
+        pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => types::NodeContract;
+		pub ContractBillingInformationByID get(fn contract_billing_information_by_id): map hasher(blake2_128_concat) u64 => types::ContractBillingInformation;
 		// ContractIDByNodeIDAndHash is a mapping for a contract ID by supplying a node_id and a deployment_hash
 		// this combination makes a deployment for a user / node unique
 		pub ContractIDByNodeIDAndHash get(fn node_contract_by_hash): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) Vec<u8> => u64;
-		pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) ContractState => Vec<NodeContract>;
+		pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) types::ContractState => Vec<types::NodeContract>;
 		pub ContractsToBillAt get(fn contract_to_bill_at_block): map hasher(blake2_128_concat) u64 => Vec<u64>;
         ContractID: u64;
 	}
@@ -155,7 +110,7 @@ decl_module! {
 		}
 
 		#[weight = 10]
-		fn add_reports(origin, reports: Vec<Consumption>) {
+		fn add_reports(origin, reports: Vec<types::Consumption>) {
 			let account_id = ensure_signed(origin)?;
 			Self::_compute_reports(account_id, reports)?;
 		}
@@ -164,10 +119,10 @@ decl_module! {
 			debug::info!("Entering on finalize: {:?}", block);
 			match Self::_bill_contracts_at_block(block) {
 				Ok(_) => {
-					debug::info!("NodeContract billed successfully at block: {:?}", block);
+					debug::info!("types::NodeContract billed successfully at block: {:?}", block);
 				},
 				Err(err) => {
-					debug::info!("NodeContract billed failed at block: {:?} with err {:?}", block, err);
+					debug::info!("types::NodeContract billed failed at block: {:?} with err {:?}", block, err);
 				}
 			}
 		}
@@ -184,7 +139,7 @@ impl<T: Config> Module<T> {
 		id = id+1;
 		
 		let twin_id = pallet_tfgrid::TwinIdByAccountID::<T>::get(&account_id);
-		let mut contract = NodeContract {
+		let mut contract = types::NodeContract {
 			version: CONTRACT_VERSION,
 			contract_id: id,
 			node_id,
@@ -192,11 +147,11 @@ impl<T: Config> Module<T> {
 			deployment_hash: deployment_hash.clone(),
 			public_ips,
 			twin_id,
-			state: ContractState::Created,
+			state: types::ContractState::Created,
 			public_ips_list: Vec::new()
 		};
 
-		let contract_billing_information = ContractBillingInformation {
+		let contract_billing_information = types::ContractBillingInformation {
 			last_updated: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
 			amount_unbilled: 0,
 			previous_nu_reported: 0
@@ -254,14 +209,14 @@ impl<T: Config> Module<T> {
 		// remove the contract by hash from storage
 		ContractIDByNodeIDAndHash::remove(contract.node_id, &contract.deployment_hash);
 
-		Self::_update_contract_state(contract, ContractState::Deleted)?;
+		Self::_update_contract_state(contract, types::ContractState::Deleted)?;
 
         Self::deposit_event(RawEvent::ContractCanceled(contract_id));
 
         Ok(())
 	}
 
-	pub fn _compute_reports(source: T::AccountId, reports: Vec<Consumption>) -> DispatchResult {
+	pub fn _compute_reports(source: T::AccountId, reports: Vec<types::Consumption>) -> DispatchResult {
 		ensure!(pallet_tfgrid::TwinIdByAccountID::<T>::contains_key(&source), Error::<T>::TwinNotExists);
 		let twin_id = pallet_tfgrid::TwinIdByAccountID::<T>::get(&source);
 		ensure!(pallet_tfgrid::NodeIdByTwinID::contains_key(twin_id), Error::<T>::NodeNotExists);
@@ -374,7 +329,7 @@ impl<T: Config> Module<T> {
 		for contract_id in contracts {
 			let mut contract = Contracts::get(contract_id);
 
-			if contract.state != ContractState::Created {
+			if contract.state != types::ContractState::Created {
 				continue
 			}
 
@@ -428,7 +383,7 @@ impl<T: Config> Module<T> {
 				if contract.public_ips > 0 {
 					Self::_free_ip(&mut contract)?;
 				}
-				Self::_update_contract_state(contract, ContractState::OutOfFunds)?;
+				Self::_update_contract_state(contract, types::ContractState::OutOfFunds)?;
 				continue
 			}
 
@@ -484,7 +439,6 @@ impl<T: Config> Module<T> {
 	}
 
 	pub fn _reinsert_contract_to_bill(contract_id: u64) -> DispatchResult {
-		// Save the contract
 		let now = <frame_system::Module<T>>::block_number().saturated_into::<u64>();
 		// Save the contract to be billed in X blocks
 		let future_block = now + BILLING_FREQUENCY_IN_BLOCKS;
@@ -495,7 +449,7 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn _update_contract_state(mut contract: NodeContract, state: ContractState) -> DispatchResult {
+	pub fn _update_contract_state(mut contract: types::NodeContract, state: types::ContractState) -> DispatchResult {
 		// Remove contract from double map first
 		let mut contracts = NodeContracts::get(&contract.node_id, &contract.state);
 
@@ -520,7 +474,7 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn _reserve_ip(contract: &mut NodeContract) -> DispatchResult {
+	pub fn _reserve_ip(contract: &mut types::NodeContract) -> DispatchResult {
 		if contract.public_ips == 0 {
 			return Ok(());
 		}
@@ -560,7 +514,7 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	pub fn _free_ip(contract: &mut NodeContract)  -> DispatchResult {
+	pub fn _free_ip(contract: &mut types::NodeContract)  -> DispatchResult {
 		let node = pallet_tfgrid::Nodes::get(contract.node_id);
 
 		ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);

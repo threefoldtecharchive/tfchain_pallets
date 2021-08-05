@@ -4,6 +4,8 @@ use sp_runtime::{
 	traits::SaturatedConversion,
 };
 
+use pallet_tfgrid::types;
+
 #[test]
 fn test_create_contract_works() {
 	new_test_ext().execute_with(|| {
@@ -132,7 +134,7 @@ fn test_push_consumption_report_works() {
 		assert_eq!(contract_to_bill, [1]);
 		
 		let mut consumption_reports = Vec::new();
-		consumption_reports.push(super::Consumption{
+		consumption_reports.push(super::types::Consumption{
 			contract_id: 1,
 			cru: 1,
 			hru: 0,
@@ -201,23 +203,23 @@ fn prepare_farm_and_node() {
 
 	let farm_name = "test_farm";
 	let mut pub_ips = Vec::new();
-	pub_ips.push(super::types::PublicIP{
+	pub_ips.push(types::PublicIP{
 		ip: "1.1.1.0".as_bytes().to_vec(),
 		gateway: "1.1.1.1".as_bytes().to_vec(),
 		contract_id: 0
 	});
 
-	TfgridModule::create_pricing_policy(Origin::signed(alice()), "policy_1".as_bytes().to_vec(), super::types::Unit::Gigabytes, 200, 100, 100, 500).unwrap();
+	TfgridModule::create_pricing_policy(Origin::signed(alice()), "policy_1".as_bytes().to_vec(), types::Unit::Gigabytes, 200, 100, 100, 500).unwrap();
 
-	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 1, super::types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
+	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 1, types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
 
 	// random location
-	let location = super::types::Location{
+	let location = types::Location{
 		longitude: "12.233213231".as_bytes().to_vec(),
 		latitude: "32.323112123".as_bytes().to_vec()
 	};
 
-	let resources = super::types::Resources {
+	let resources = types::Resources {
 		hru: 1,
 		sru: 1,
 		cru: 1,
