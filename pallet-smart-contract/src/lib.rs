@@ -72,8 +72,6 @@ decl_error! {
 	}
 }
 
-
-
 decl_storage! {
 	trait Store for Module<T: Config> as SmartContractModule {
         pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => types::NodeContract;
@@ -251,61 +249,7 @@ impl<T: Config> Module<T> {
 				continue;
 			}
 
-			let seconds_elapsed = report.timestamp - contract_billing_info.last_updated;
-			debug::info!("seconds elapsed: {:?}", seconds_elapsed);
-
-			
-			let factor = match pricing_policy.unit {
-				pallet_tfgrid::types::Unit::Bytes => {
-					1
-				}
-				pallet_tfgrid::types::Unit::Kilobytes => {
-					1024
-				}
-				pallet_tfgrid::types::Unit::Megabytes => {
-					1024 * 1024
-				}
-				pallet_tfgrid::types::Unit::Gigabytes => {
-					1024 * 1024 * 1024
-				}
-			};
-
-			let hru = U64F64::from_num(report.hru) / factor;
-			let sru = U64F64::from_num(report.sru) / factor;
-			let mru = U64F64::from_num(report.mru) / factor;
-
-			let su_used = hru / 1200 + sru / 300;
-			let su_cost = U64F64::from_num(pricing_policy.su) * U64F64::from_num(seconds_elapsed) * su_used;
-			debug::info!("su cost: {:?}", su_cost);
-
-			let mru_used = mru / 4;
-			let cru_used = U64F64::from_num(report.cru) / 2;
-			let min = if mru_used < cru_used {
-				mru_used
-			} else {
-				cru_used
-			};
-			let cu_cost = U64F64::from_num(pricing_policy.cu) * U64F64::from_num(seconds_elapsed) * min;
-			debug::info!("cu cost: {:?}", cu_cost);
-
-			let mut used_nru = U64F64::from_num(report.nru) / factor;
-			let nu_cost = if used_nru > contract_billing_info.previous_nu_reported {
-				// calculate used nru by subtracting previous reported units minus what is reported now
-				// this is because nru is in a counter that increases only
-				used_nru -= U64F64::from_num(contract_billing_info.previous_nu_reported);
-
-				// calculate the cost for nru based on the used nru
-				used_nru * U64F64::from_num(pricing_policy.nu)
-			} else {
-				U64F64::from_num(0)
-			};
-
-			debug::info!("nu cost: {:?}", nu_cost);
-
-			// save total
-			let total = su_cost + cu_cost + nu_cost;
-			let total = total.ceil().to_num::<u64>();
-			debug::info!("total cost: {:?}", total);
+			let total = Self::_calculate_report_cost(&report, &contract_billing_info, &pricing_policy);
 
 			// update contract_billing_info
 			contract_billing_info.amount_unbilled += total;
@@ -315,6 +259,68 @@ impl<T: Config> Module<T> {
 		}
 
 		Ok(())
+	}
+
+	// Calculates the total cost of a report.
+	// Takes in a report, the contract's billing information and the linked farm's pricing policy.
+	// Returns a positive integer which represents the cost in tokens 
+	pub fn _calculate_report_cost(report: &types::Consumption, contract_billing_info: &types::ContractBillingInformation, pricing_policy: &pallet_tfgrid_types::PricingPolicy) -> u64 {
+		let seconds_elapsed = report.timestamp - contract_billing_info.last_updated;
+		debug::info!("seconds elapsed: {:?}", seconds_elapsed);
+		
+		let factor = match pricing_policy.unit {
+			pallet_tfgrid::types::Unit::Bytes => {
+				1
+			}
+			pallet_tfgrid::types::Unit::Kilobytes => {
+				1024
+			}
+			pallet_tfgrid::types::Unit::Megabytes => {
+				1024 * 1024
+			}
+			pallet_tfgrid::types::Unit::Gigabytes => {
+				1024 * 1024 * 1024
+			}
+		};
+
+		let hru = U64F64::from_num(report.hru) / factor;
+		let sru = U64F64::from_num(report.sru) / factor;
+		let mru = U64F64::from_num(report.mru) / factor;
+
+		let su_used = hru / 1200 + sru / 300;
+		let su_cost = U64F64::from_num(pricing_policy.su) * U64F64::from_num(seconds_elapsed) * su_used;
+		debug::info!("su cost: {:?}", su_cost);
+
+		let mru_used = mru / 4;
+		let cru_used = U64F64::from_num(report.cru) / 2;
+		let min = if mru_used < cru_used {
+			mru_used
+		} else {
+			cru_used
+		};
+		let cu_cost = U64F64::from_num(pricing_policy.cu) * U64F64::from_num(seconds_elapsed) * min;
+		debug::info!("cu cost: {:?}", cu_cost);
+
+		let mut used_nru = U64F64::from_num(report.nru) / factor;
+		let nu_cost = if used_nru > contract_billing_info.previous_nu_reported {
+			// calculate used nru by subtracting previous reported units minus what is reported now
+			// this is because nru is in a counter that increases only
+			used_nru -= U64F64::from_num(contract_billing_info.previous_nu_reported);
+
+			// calculate the cost for nru based on the used nru
+			used_nru * U64F64::from_num(pricing_policy.nu)
+		} else {
+			U64F64::from_num(0)
+		};
+
+		debug::info!("nu cost: {:?}", nu_cost);
+
+		// save total
+		let total = su_cost + cu_cost + nu_cost;
+		let total = total.ceil().to_num::<u64>();
+		debug::info!("total cost: {:?}", total);
+
+		total
 	}
 
 	pub fn _bill_contracts_at_block(block: T::BlockNumber) -> DispatchResult {
@@ -327,75 +333,87 @@ impl<T: Config> Module<T> {
 		}
 
 		for contract_id in contracts {
-			let mut contract = Contracts::get(contract_id);
-
+			let contract = Contracts::get(contract_id);
 			if contract.state != types::ContractState::Created {
 				continue
 			}
 
-			let node = pallet_tfgrid::Nodes::get(contract.node_id);
-			ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
-
-			let farm = pallet_tfgrid::Farms::get(node.farm_id);
-			ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
-
-			let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
-			
-			// bill user for 1 hour ip usage (10 blocks * 6 seconds)
-			let total_ip_cost = contract.public_ips * pricing_policy.ipu * (BILLING_FREQUENCY_IN_BLOCKS as u32 * 6);
-			
-			let mut contract_billing_info = ContractBillingInformationByID::get(contract_id);
-			let total = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
-
-			if total == 0 {
-				Self::_reinsert_contract_to_bill(contract.contract_id)?;
-				continue
-			}
-
-			// get the contracts free balance
-			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-			let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
-			debug::info!("free balance: {:?}", balance);
-			
-			let mut decomission = false;
-			let balances_as_u128: u128 = balance.saturated_into::<u128>();
-			// if the total amount due exceeds to the balance decomission contract
-			// but first drain the account
-			if total as u128 >= balances_as_u128 {
-				decomission = true;				
-			}
-
-			let (amount_due, discount_received) = Self::_calculate_discount(BalanceOf::<T>::saturated_from(total), balances_as_u128);
-
-			// fetch source twin
-			let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-			// fetch farmer twin
-			let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
-			debug::info!("Transfering: {:?} from contract {:?} to farmer {:?}", &amount_due, &twin.account_id, &farmer_twin.account_id);
-			// Transfer currency to the farmers account
-			T::Currency::transfer(&twin.account_id, &farmer_twin.account_id, amount_due, AllowDeath)
-				.map_err(|_| DispatchError::Other("Can't make transfer"))?;
-
-			let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
-			Self::deposit_event(RawEvent::ContractBilled(contract.contract_id, discount_received.as_bytes().to_vec(), amount_due_as_u128));
-
-			if decomission {
-				if contract.public_ips > 0 {
-					Self::_free_ip(&mut contract)?;
-				}
-				Self::_update_contract_state(contract, types::ContractState::OutOfFunds)?;
-				continue
-			}
-
-			// set the amount unbilled back to 0
-			contract_billing_info.amount_unbilled = 0;
-			ContractBillingInformationByID::insert(contract.contract_id, &contract_billing_info);
-
-			Self::_reinsert_contract_to_bill(contract.contract_id)?;
+			Self::_bill_contract(contract)?;
 		}
 		Ok(())
 	}
 
+	// Bills a contract based on:
+	// Saved amount unbilled on the contract, this is incremented by the node sending capacity reports
+	// We calculate total IP cost for the amount between the last billed time and now and add this to the amount due
+	// If the user runs out of balance, we decomission the contract and therefor will be removed, ips will be freed as well
+	fn _bill_contract(mut contract: types::NodeContract) -> DispatchResult {
+		let node = pallet_tfgrid::Nodes::get(contract.node_id);
+		ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
+
+		let farm = pallet_tfgrid::Farms::get(node.farm_id);
+		ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
+
+		let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
+		
+		// bill user for 1 hour ip usage (10 blocks * 6 seconds)
+		let total_ip_cost = contract.public_ips * pricing_policy.ipu * (BILLING_FREQUENCY_IN_BLOCKS as u32 * 6);
+		
+		let mut contract_billing_info = ContractBillingInformationByID::get(contract.contract_id);
+		let total = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
+
+		if total == 0 {
+			Self::_reinsert_contract_to_bill(contract.contract_id)?;
+			return Ok(())
+		}
+
+		// get the contracts free balance
+		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+		let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
+		debug::info!("free balance: {:?}", balance);
+		
+		let mut decomission = false;
+		let balances_as_u128: u128 = balance.saturated_into::<u128>();
+		// if the total amount due exceeds to the balance decomission contract
+		// but first drain the account
+		if total as u128 >= balances_as_u128 {
+			decomission = true;				
+		}
+
+		let (amount_due, discount_received) = Self::_calculate_discount(BalanceOf::<T>::saturated_from(total), balances_as_u128);
+
+		// fetch source twin
+		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+		// fetch farmer twin
+		let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
+		debug::info!("Transfering: {:?} from contract {:?} to farmer {:?}", &amount_due, &twin.account_id, &farmer_twin.account_id);
+		// Transfer currency to the farmers account
+		T::Currency::transfer(&twin.account_id, &farmer_twin.account_id, amount_due, AllowDeath)
+			.map_err(|_| DispatchError::Other("Can't make transfer"))?;
+
+		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+		Self::deposit_event(RawEvent::ContractBilled(contract.contract_id, discount_received.as_bytes().to_vec(), amount_due_as_u128));
+
+		if decomission {
+			if contract.public_ips > 0 {
+				Self::_free_ip(&mut contract)?;
+			}
+			Self::_update_contract_state(contract, types::ContractState::OutOfFunds)?;
+			return Ok(())
+		}
+
+		// set the amount unbilled back to 0
+		contract_billing_info.amount_unbilled = 0;
+		ContractBillingInformationByID::insert(contract.contract_id, &contract_billing_info);
+
+		Self::_reinsert_contract_to_bill(contract.contract_id)?;
+
+		Ok(())
+	}
+
+	// Calculates the discount that will be applied to the billing of the contract
+	// Returns an amount due as balance object and a static string indicating which kind of discount it received
+	// (default, bronze, silver, gold or none)
 	fn _calculate_discount(amount_due: BalanceOf<T>, balance: u128) -> (BalanceOf<T>, &'static str) {
 		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
 		// calculate amount due on a monthly basis
@@ -438,6 +456,7 @@ impl<T: Config> Module<T> {
 		(amount_due, discount_received)
 	}
 
+	// Reinserts a contract by id at the next interval we need to bill the contract
 	pub fn _reinsert_contract_to_bill(contract_id: u64) -> DispatchResult {
 		let now = <frame_system::Module<T>>::block_number().saturated_into::<u64>();
 		// Save the contract to be billed in X blocks
