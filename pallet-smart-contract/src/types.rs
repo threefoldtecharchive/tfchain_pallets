@@ -1,5 +1,6 @@
 use frame_support::traits::Vec;
 use codec::{Decode, Encode};
+use substrate_fixed::types::{U64F64};
 
 use pallet_tfgrid::types;
 
@@ -37,6 +38,33 @@ pub enum ContractState {
 impl Default for ContractState {
 	fn default() -> ContractState {
 		ContractState::Created
+	}
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
+pub enum DiscountLevel {
+	None,
+	Default,
+	Bronze,
+	Silver,
+	Gold
+}
+
+impl Default for DiscountLevel {
+	fn default() -> DiscountLevel {
+		DiscountLevel::None
+	}
+}
+
+impl DiscountLevel {
+	pub fn price_multiplier(&self) -> U64F64 {
+		match self {
+			DiscountLevel::None => U64F64::from_num(1),
+			DiscountLevel::Default => U64F64::from_num(0.8),
+			DiscountLevel::Bronze => U64F64::from_num(0.7),
+			DiscountLevel::Silver => U64F64::from_num(0.6),
+			DiscountLevel::Gold => U64F64::from_num(0.4),
+		}
 	}
 }
 
