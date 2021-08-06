@@ -235,7 +235,7 @@ impl<T: Config> Module<T> {
 			continue;
 		  }
 		  let contract = Contracts::get(report.contract_id);
-		  ensure!(contract.node_id == twin_id, Error::<T>::NodeNotAuthorizedToComputeReport);
+		  ensure!(contract.node_id == node_id, Error::<T>::NodeNotAuthorizedToComputeReport);
 		  ensure!(ContractBillingInformationByID::contains_key(report.contract_id), Error::<T>::ContractNotExists);
 		}
 

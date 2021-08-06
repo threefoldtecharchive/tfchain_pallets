@@ -1,3 +1,4 @@
+use frame_support::traits::Vec;
 use codec::{Decode, Encode};
 
 use pallet_tfgrid::types;
