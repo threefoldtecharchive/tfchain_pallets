@@ -404,7 +404,7 @@ fn test_create_farm_works() {
 			contract_id: 0
 		});
 
-		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 0, super::types::CertificationType::Diy, 0, 0, pub_ips));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips));
 	});
 }
 
@@ -454,10 +454,10 @@ fn test_create_farm_with_same_name_fails() {
 			gateway: "1.1.1.1".as_bytes().to_vec(),
 			contract_id: 0
 		});
-		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 0, super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
 
 		assert_noop!(
-			TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 0, super::types::CertificationType::Diy, 0, 0, pub_ips),
+			TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips),
 			Error::<TestRuntime>::FarmExists
 		);
 	});
@@ -483,7 +483,7 @@ fn create_node_works() {
 			gateway: "1.1.1.1".as_bytes().to_vec(),
 			contract_id: 0
 		});
-		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 0, super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
 
 
 		// random location
@@ -523,7 +523,7 @@ fn create_node_with_same_pubkey_fails() {
 			gateway: "1.1.1.1".as_bytes().to_vec(),
 			contract_id: 0
 		});
-		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 0, super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
 
 
 		// random location
