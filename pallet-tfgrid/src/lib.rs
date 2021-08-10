@@ -152,13 +152,19 @@ decl_module! {
 
             // reset all public ip contract id's
             // just a safeguard
-            let mut pub_ips = Vec::new();
+            // filter out doubles
+            let mut pub_ips: Vec<types::PublicIP> = Vec::new();
             for ip in public_ips {
-                pub_ips.push(types::PublicIP{
-                    ip: ip.ip,
-                    gateway: ip.gateway,
-                    contract_id: 0
-                });
+                match pub_ips.iter().position(|pub_ip| pub_ip.ip == ip.ip) {
+                    Some(_) => return Err(Error::<T>::IpExists.into()),
+                    None => {
+                        pub_ips.push(types::PublicIP{
+                            ip: ip.ip,
+                            gateway: ip.gateway,
+                            contract_id: 0
+                        });
+                    }
+                };
             };
 
             let new_farm = types::Farm {
@@ -227,16 +233,15 @@ decl_module! {
                 contract_id: 0
             };
 
-            match stored_farm.public_ips.binary_search(&new_ip) {
-                Ok(_) => Err(Error::<T>::IpExists.into()),
-                // If the search fails, the caller is not a member of the list
-                Err(_) => {
+            match stored_farm.public_ips.iter().position(|public_ip| public_ip.ip == new_ip.ip) {
+                Some(_) => return Err(Error::<T>::IpExists.into()),
+                None => {
                     stored_farm.public_ips.push(new_ip);
                     Farms::insert(stored_farm.id, &stored_farm);
                     Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
-                    Ok(())
+                    return Ok(())
                 }
-            }
+            };
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]

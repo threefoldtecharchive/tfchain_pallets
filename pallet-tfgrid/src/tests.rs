@@ -409,6 +409,99 @@ fn test_create_farm_works() {
 }
 
 #[test]
+fn test_create_farm_with_double_ip_fails() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+
+		let ip = "10.2.3.3";
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
+		let farm_name = "test_farm";
+		let mut pub_ips = Vec::new();
+		pub_ips.push(super::types::PublicIP{
+			ip: "1.1.1.0".as_bytes().to_vec(),
+			gateway: "1.1.1.1".as_bytes().to_vec(),
+			contract_id: 0
+		});
+		pub_ips.push(super::types::PublicIP{
+			ip: "1.1.1.0".as_bytes().to_vec(),
+			gateway: "1.1.1.1".as_bytes().to_vec(),
+			contract_id: 0
+		});
+
+		assert_noop!(
+			TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips),
+			Error::<TestRuntime>::IpExists
+		);
+	});
+}
+
+#[test]
+fn test_adding_ip_to_farm_works() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+
+		let ip = "10.2.3.3";
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
+		let farm_name = "test_farm";
+		let mut pub_ips = Vec::new();
+		pub_ips.push(super::types::PublicIP{
+			ip: "1.1.1.0".as_bytes().to_vec(),
+			gateway: "1.1.1.1".as_bytes().to_vec(),
+			contract_id: 0
+		});
+
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips));
+
+		assert_ok!(TfgridModule::add_farm_ip(Origin::signed(alice()), 1, "1.1.1.2".as_bytes().to_vec(), "1.1.1.1".as_bytes().to_vec()));
+	});
+}
+
+#[test]
+fn test_adding_ip_duplicate_to_farm_fails() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+
+		let ip = "10.2.3.3";
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
+		let farm_name = "test_farm";
+		let mut pub_ips = Vec::new();
+		pub_ips.push(super::types::PublicIP{
+			ip: "1.1.1.0".as_bytes().to_vec(),
+			gateway: "1.1.1.1".as_bytes().to_vec(),
+			contract_id: 0
+		});
+
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips));
+
+		assert_ok!(TfgridModule::add_farm_ip(Origin::signed(alice()), 1, "1.1.1.2".as_bytes().to_vec(), "1.1.1.1".as_bytes().to_vec()));
+
+		assert_noop!(
+			TfgridModule::add_farm_ip(Origin::signed(alice()), 1, "1.1.1.2".as_bytes().to_vec(), "1.1.1.1".as_bytes().to_vec()),
+			Error::<TestRuntime>::IpExists
+		);
+	});
+}
+
+
+#[test]
 fn test_update_twin_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		let mut ip = "some_ip";

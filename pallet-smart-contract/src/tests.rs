@@ -212,7 +212,7 @@ fn prepare_farm_and_node() {
 
 	TfgridModule::create_pricing_policy(Origin::signed(alice()), "policy_1".as_bytes().to_vec(), pallet_tfgrid_types::Unit::Gigabytes, 200, 100, 100, 500).unwrap();
 
-	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), 1, pallet_tfgrid_types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
+	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), pallet_tfgrid_types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
 
 	// random location
 	let location = pallet_tfgrid_types::Location{
