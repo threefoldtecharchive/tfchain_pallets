@@ -6,7 +6,7 @@
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 use hex::FromHex;
 
@@ -138,7 +138,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_farm(origin, name: Vec<u8>, pricing_policy_id: u32, certification_type: types::CertificationType, country_id: u32, city_id: u32, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
+        pub fn create_farm(origin, name: Vec<u8>, certification_type: types::CertificationType, country_id: u32, city_id: u32, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
             ensure!(!FarmIdByName::contains_key(name.clone()), Error::<T>::FarmExists);
@@ -166,7 +166,7 @@ decl_module! {
                 id,
                 twin_id,
                 name,
-                pricing_policy_id,
+                pricing_policy_id: 1,
                 certification_type,
                 country_id,
                 city_id,
@@ -603,7 +603,7 @@ decl_module! {
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_pricing_policy(origin, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
-            let _ = ensure_signed(origin)?;
+            let _ = ensure_root(origin)?;
 
             ensure!(!PricingPolicyIdByName::contains_key(&name), Error::<T>::PricingPolicyExists);
 
@@ -633,7 +633,7 @@ decl_module! {
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn update_pricing_policy(origin, id: u32, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
-            let _ = ensure_signed(origin)?;
+            let _ = ensure_root(origin)?;
 
             ensure!(PricingPolicies::contains_key(&id), Error::<T>::PricingPolicyNotExists);
             ensure!(!PricingPolicyIdByName::contains_key(&name), Error::<T>::PricingPolicyExists);
