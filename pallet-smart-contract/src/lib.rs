@@ -10,7 +10,6 @@ use sp_runtime::{
 	DispatchResult, DispatchError,
 	traits::SaturatedConversion,
 };
-use regex::Regex;
 use substrate_fixed::types::{U64F64};
 
 use pallet_tfgrid;
@@ -618,13 +617,14 @@ impl<T: Config> Module<T> {
 		// Validate name uniqueness
 		ensure!(!NameRegistrations::contains_key(&name), Error::<T>::NameExists);
 
-		match core::str::from_utf8(&name[..]) {
-			Ok(res) => {
-				let valid_dns_regex = Regex::new(r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))$").unwrap();
-				ensure!(valid_dns_regex.is_match(res), Error::<T>::NameNotValid);
-			},
-			Err(_) => return Err(DispatchError::Other("Invalid UTF-8 dns name")),
-		};
+		for character in &name {
+			match character {
+				c if *c == 45 => (),
+				c if *c >= 48 && *c <= 57 => (),
+				c if *c >= 65 && *c <= 122 => (),
+				_ => return Err(DispatchError::from(Error::<T>::NameNotValid))
+			}
+		}
 
 		let name_registration_id = NameRegistrationID::get() +1;
 		

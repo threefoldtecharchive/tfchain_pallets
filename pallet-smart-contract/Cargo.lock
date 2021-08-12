@@ -1103,7 +1103,6 @@ dependencies = [
  "pallet-tfgrid",
  "pallet-timestamp",
  "parity-scale-codec",
- "regex",
  "serde",
  "sp-core",
  "sp-io",
