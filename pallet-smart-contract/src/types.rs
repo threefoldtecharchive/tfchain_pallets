@@ -78,3 +78,10 @@ pub struct Consumption {
 	pub mru: u64,
 	pub nru: u64
 }
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct NameRegistration {
+	pub name_registration_id: u64,
+	pub twin_id: u32,
+	pub name: Vec<u8>,
+}

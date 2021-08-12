@@ -196,6 +196,43 @@ fn test_push_consumption_report_works() {
 	});
 }
 
+#[test]
+fn test_name_registration_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::register_name(Origin::signed(alice()), "foobar".as_bytes().to_vec()));
+	});
+}
+
+#[test]
+fn test_name_registration_fails_with_invalid_dns_name() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_noop!(
+			SmartContractModule::register_name(Origin::signed(alice()), "foo.bar".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+
+		assert_noop!(
+			SmartContractModule::register_name(Origin::signed(alice()), "foo!".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+
+		assert_noop!(
+			SmartContractModule::register_name(Origin::signed(alice()), "foo;'".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+
+		assert_noop!(
+			SmartContractModule::register_name(Origin::signed(alice()), "foo123.%".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+	});
+}
+
+
 fn prepare_farm_and_node() {
 	let ip = "10.2.3.3";
 	TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()).unwrap();

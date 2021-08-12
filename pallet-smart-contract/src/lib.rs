@@ -10,11 +10,12 @@ use sp_runtime::{
 	DispatchResult, DispatchError,
 	traits::SaturatedConversion,
 };
+use regex::Regex;
+use substrate_fixed::types::{U64F64};
+
 use pallet_tfgrid;
 use pallet_timestamp as timestamp;
 use pallet_tfgrid::types as pallet_tfgrid_types;
-
-use substrate_fixed::types::{U64F64};
 
 #[cfg(test)]
 mod mock;
@@ -49,6 +50,7 @@ decl_event!(
 		ContractDeployed(u64, AccountId),
 		ConsumptionReportReceived(types::Consumption),
 		ContractBilled(u64, types::DiscountLevel, u128),
+		NameRegistered(types::NameRegistration),
 	}
 );
 
@@ -68,7 +70,9 @@ decl_error! {
 		NodeNotAuthorizedToDeployContract,
 		NodeNotAuthorizedToComputeReport,
 		PricingPolicyNotExists,
-		ContractIsNotUnique
+		ContractIsNotUnique,
+		NameExists,
+		NameNotValid
 	}
 }
 
@@ -81,7 +85,11 @@ decl_storage! {
 		pub ContractIDByNodeIDAndHash get(fn node_contract_by_hash): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) Vec<u8> => u64;
 		pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) types::ContractState => Vec<types::NodeContract>;
 		pub ContractsToBillAt get(fn contract_to_bill_at_block): map hasher(blake2_128_concat) u64 => Vec<u64>;
+		pub NameRegistrations get(fn name_registrations): map hasher(blake2_128_concat) Vec<u8> => types::NameRegistration;
+
+		// ID maps
         ContractID: u64;
+		NameRegistrationID: u64;
 	}
 }
 
@@ -111,6 +119,12 @@ decl_module! {
 		fn add_reports(origin, reports: Vec<types::Consumption>) {
 			let account_id = ensure_signed(origin)?;
 			Self::_compute_reports(account_id, reports)?;
+		}
+
+		#[weight = 10]
+		fn register_name(origin, name: Vec<u8>) {
+			let account_id = ensure_signed(origin)?;
+			Self::_register_name(account_id, name)?;
 		}
 
 		fn on_finalize(block: T::BlockNumber) {
@@ -591,6 +605,38 @@ impl<T: Config> Module<T> {
 
 		// Emit an event containing the IP's freed for this contract
 		Self::deposit_event(RawEvent::IPsFreed(contract.contract_id, ips_freed));
+
+		Ok(())
+	}
+
+	// Registers a DNS name for a Twin
+	// Ensures uniqueness and also checks if it's a valid DNS name
+	pub fn _register_name(source: T::AccountId, name: Vec<u8>) -> DispatchResult {
+		ensure!(pallet_tfgrid::TwinIdByAccountID::<T>::contains_key(&source), Error::<T>::TwinNotExists);
+		let twin_id = pallet_tfgrid::TwinIdByAccountID::<T>::get(&source);
+		
+		// Validate name uniqueness
+		ensure!(!NameRegistrations::contains_key(&name), Error::<T>::NameExists);
+
+		match core::str::from_utf8(&name[..]) {
+			Ok(res) => {
+				let valid_dns_regex = Regex::new(r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))$").unwrap();
+				ensure!(valid_dns_regex.is_match(res), Error::<T>::NameNotValid);
+			},
+			Err(_) => return Err(DispatchError::Other("Invalid UTF-8 dns name")),
+		};
+
+		let name_registration_id = NameRegistrationID::get() +1;
+		
+		let name_registration = types::NameRegistration {
+			name_registration_id,
+			twin_id,
+			name: name.clone()
+		};
+
+		NameRegistrations::insert(name, &name_registration);
+
+		Self::deposit_event(RawEvent::NameRegistered(name_registration));
 
 		Ok(())
 	}
