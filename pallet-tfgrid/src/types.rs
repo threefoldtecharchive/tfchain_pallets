@@ -104,7 +104,7 @@ pub struct Location {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct PricingPolicy {
+pub struct PricingPolicy<AccountId> {
     pub version: u32,
     pub id: u32,
     pub name: Vec<u8>,
@@ -113,6 +113,8 @@ pub struct PricingPolicy {
     pub cu: u32,
     pub nu: u32,
     pub ipu: u32,
+    pub foundation_account: AccountId,
+    pub certified_sales_account: AccountId,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]

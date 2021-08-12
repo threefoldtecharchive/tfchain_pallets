@@ -3,6 +3,7 @@ use frame_support::{assert_noop, assert_ok, traits::{OnFinalize, OnInitialize}};
 use sp_runtime::{
 	traits::SaturatedConversion,
 };
+use frame_system::{RawOrigin};
 
 use pallet_tfgrid::types as pallet_tfgrid_types;
 use super::types;
@@ -210,7 +211,7 @@ fn prepare_farm_and_node() {
 		contract_id: 0
 	});
 
-	TfgridModule::create_pricing_policy(Origin::signed(alice()), "policy_1".as_bytes().to_vec(), pallet_tfgrid_types::Unit::Gigabytes, 200, 100, 100, 500).unwrap();
+	TfgridModule::create_pricing_policy(RawOrigin::Root.into(), "policy_1".as_bytes().to_vec(), pallet_tfgrid_types::Unit::Gigabytes, 200, 100, 100, 500, bob(), bob()).unwrap();
 
 	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), pallet_tfgrid_types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
 

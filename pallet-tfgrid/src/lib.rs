@@ -43,7 +43,7 @@ decl_storage! {
         pub Twins get(fn twins): map hasher(blake2_128_concat) u32 => types::Twin<T::AccountId>;
         pub TwinIdByAccountID get(fn twin_ids_by_pubkey): map hasher(blake2_128_concat) T::AccountId => u32;
 
-        pub PricingPolicies get(fn pricing_policies): map hasher(blake2_128_concat) u32 => types::PricingPolicy;
+        pub PricingPolicies get(fn pricing_policies): map hasher(blake2_128_concat) u32 => types::PricingPolicy<T::AccountId>;
         pub PricingPolicyIdByName get(fn pricing_policies_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
 
         pub CertificationCodes get(fn certification_codes): map hasher(blake2_128_concat) u32 => types::CertificationCodes;
@@ -88,7 +88,7 @@ decl_event!(
         TwinEntityRemoved(u32, u32),
         TwinDeleted(u32),
 
-        PricingPolicyStored(types::PricingPolicy),
+        PricingPolicyStored(types::PricingPolicy<AccountId>),
         CertificationCodeStored(types::CertificationCodes),
         FarmingPolicyStored(types::FarmingPolicy),
     }
@@ -654,7 +654,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_pricing_policy(origin, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
+        pub fn create_pricing_policy(origin, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32, foundation_account: T::AccountId, certified_sales_account: T::AccountId) -> dispatch::DispatchResult {
             let _ = ensure_root(origin)?;
 
             ensure!(!PricingPolicyIdByName::contains_key(&name), Error::<T>::PricingPolicyExists);
@@ -671,10 +671,12 @@ decl_module! {
                 su,
                 cu,
                 nu,
-                ipu
+                ipu,
+                foundation_account,
+                certified_sales_account,
             };
 
-            PricingPolicies::insert(&id, &new_policy);
+            PricingPolicies::<T>::insert(&id, &new_policy);
             PricingPolicyIdByName::insert(&new_policy.name, &id);
             PricingPolicyID::put(id);
 
@@ -687,9 +689,9 @@ decl_module! {
         pub fn update_pricing_policy(origin, id: u32, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
             let _ = ensure_root(origin)?;
 
-            ensure!(PricingPolicies::contains_key(&id), Error::<T>::PricingPolicyNotExists);
+            ensure!(PricingPolicies::<T>::contains_key(&id), Error::<T>::PricingPolicyNotExists);
             ensure!(!PricingPolicyIdByName::contains_key(&name), Error::<T>::PricingPolicyExists);
-            let mut pricing_policy = PricingPolicies::get(id);
+            let mut pricing_policy = PricingPolicies::<T>::get(id);
 
             if name != pricing_policy.name {
                 PricingPolicyIdByName::remove(&pricing_policy.name);
@@ -702,7 +704,7 @@ decl_module! {
             pricing_policy.nu = nu;
             pricing_policy.ipu = ipu;
 
-            PricingPolicies::insert(&id, &pricing_policy);
+            PricingPolicies::<T>::insert(&id, &pricing_policy);
             PricingPolicyIdByName::insert(&pricing_policy.name, &id);
             PricingPolicyID::put(id);
 

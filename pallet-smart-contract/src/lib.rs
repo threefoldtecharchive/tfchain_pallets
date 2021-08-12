@@ -3,7 +3,7 @@
 use frame_support::{
 	decl_event, decl_module, decl_storage, decl_error, ensure, debug,
 	traits::{Vec},
-	traits::{Currency, ExistenceRequirement::AllowDeath},
+	traits::{Currency, ExistenceRequirement::KeepAlive},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
@@ -157,6 +157,8 @@ impl<T: Config> Module<T> {
 
 		Self::_reserve_ip(&mut contract)?;
 
+		// Start billing frequency loop
+		// Will always be block now + frequency
 		Self::_reinsert_contract_to_bill(contract.contract_id)?;
 
         Contracts::insert(id, &contract);
@@ -226,8 +228,8 @@ impl<T: Config> Module<T> {
 		ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
 		let farm = pallet_tfgrid::Farms::get(node.farm_id);
 		
-		ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
-		let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
+		ensure!(pallet_tfgrid::PricingPolicies::<T>::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
+		let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(farm.pricing_policy_id);
 
 		// validation
 		for report in &reports {
@@ -264,7 +266,7 @@ impl<T: Config> Module<T> {
 	// Calculates the total cost of a report.
 	// Takes in a report, the contract's billing information and the linked farm's pricing policy.
 	// Returns a positive integer which represents the cost in tokens 
-	pub fn _calculate_report_cost(report: &types::Consumption, contract_billing_info: &types::ContractBillingInformation, pricing_policy: &pallet_tfgrid_types::PricingPolicy) -> u64 {
+	pub fn _calculate_report_cost(report: &types::Consumption, contract_billing_info: &types::ContractBillingInformation, pricing_policy: &pallet_tfgrid_types::PricingPolicy<T::AccountId>) -> u64 {
 		let seconds_elapsed = report.timestamp - contract_billing_info.last_updated;
 		debug::info!("seconds elapsed: {:?}", seconds_elapsed);
 		
@@ -344,9 +346,9 @@ impl<T: Config> Module<T> {
 		ensure!(pallet_tfgrid::Farms::contains_key(&node.farm_id), Error::<T>::FarmNotExists);
 
 		let farm = pallet_tfgrid::Farms::get(node.farm_id);
-		ensure!(pallet_tfgrid::PricingPolicies::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
+		ensure!(pallet_tfgrid::PricingPolicies::<T>::contains_key(farm.pricing_policy_id), Error::<T>::PricingPolicyNotExists);
 
-		let pricing_policy = pallet_tfgrid::PricingPolicies::get(farm.pricing_policy_id);
+		let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(farm.pricing_policy_id);
 		
 		// bill user for 1 hour ip usage (10 blocks * 6 seconds)
 		let total_ip_cost = contract.public_ips * pricing_policy.ipu * (BILLING_FREQUENCY_IN_BLOCKS as u32 * 6);
@@ -372,20 +374,17 @@ impl<T: Config> Module<T> {
 			decomission = true;				
 		}
 
-		let (amount_due, discount_received) = Self::_calculate_discount(BalanceOf::<T>::saturated_from(total), balances_as_u128);
+		// Calculate the amount due and discount received based on the total amount due
+		let (amount_due, discount_received) = Self::_calculate_discount(BalanceOf::<T>::saturated_from(total), balances_as_u128, farm.certification_type);
 
-		// fetch source twin
-		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-		// fetch farmer twin
-		let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
-		debug::info!("Transfering: {:?} from contract {:?} to farmer {:?}", &amount_due, &twin.account_id, &farmer_twin.account_id);
-		// Transfer currency to the farmers account
-		T::Currency::transfer(&twin.account_id, &farmer_twin.account_id, amount_due, AllowDeath)
-			.map_err(|_| DispatchError::Other("Can't make transfer"))?;
+		// Distribute cultivation rewards
+		Self::_distribute_cultivation_rewards(&contract, &node, &farm, &pricing_policy, amount_due)?;
 
+		// Deposit Event
 		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
 		Self::deposit_event(RawEvent::ContractBilled(contract.contract_id, discount_received, amount_due_as_u128));
 
+		// If total balance exceeds the twin's balance, we can decomission contract
 		if decomission {
 			if contract.public_ips > 0 {
 				Self::_free_ip(&mut contract)?;
@@ -398,15 +397,68 @@ impl<T: Config> Module<T> {
 		contract_billing_info.amount_unbilled = 0;
 		ContractBillingInformationByID::insert(contract.contract_id, &contract_billing_info);
 
+		// Reinsert contract to be billed for the next frequency
 		Self::_reinsert_contract_to_bill(contract.contract_id)?;
 
+		Ok(())
+	}
+
+	// Following: https://github.com/threefoldfoundation/info_threefold/blob/development/wiki/farming/farming3/cultivation_flow.md
+	fn _distribute_cultivation_rewards(
+		contract: &types::NodeContract,
+		node: &pallet_tfgrid_types::Node,
+		farm: &pallet_tfgrid_types::Farm,
+		pricing_policy: &pallet_tfgrid_types::PricingPolicy<T::AccountId>,
+		amount: BalanceOf<T>
+	) -> DispatchResult {
+		// fetch farmer twin
+		let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
+		// fetch source twin
+		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+
+		// parse amount
+		let amount = U64F64::from_num(amount.saturated_into::<u128>());
+
+		let foundation_share = amount * U64F64::from_num(0.3);
+		let mut certified_sales_share = amount * U64F64::from_num(0.6);
+
+		// by default, 10% of the cultivation rewards go to the farmer
+		let mut farmer_share = amount * U64F64::from_num(0.1);
+		// if the farmer is deploying workloads on his own farm, return to him 70% of the total amount
+		if node.farm_id == farm.id {
+			farmer_share = amount * U64F64::from_num(0.7);
+			certified_sales_share = U64F64::from_num(0);
+		}
+
+		// Tranfer to foundation account
+		let foundation_share_balance = BalanceOf::<T>::saturated_from(foundation_share.ceil().to_num::<u128>());
+		debug::info!("Transfering: {:?} from contract twin {:?} to foundation account {:?}", &foundation_share_balance, &twin.account_id, &pricing_policy.foundation_account);
+		T::Currency::transfer(&twin.account_id, &pricing_policy.foundation_account, foundation_share_balance, KeepAlive)
+			.map_err(|_| DispatchError::Other("Can't make foundation share transfer"))?;
+		
+		// Transfer to farmer account
+		let farmers_share_balance = BalanceOf::<T>::saturated_from(farmer_share.ceil().to_num::<u128>());
+		debug::info!("Transfering: {:?} from contract twin {:?} to foundation account {:?}", &farmers_share_balance, &twin.account_id, &farmer_twin.account_id);
+		T::Currency::transfer(&twin.account_id, &farmer_twin.account_id, farmers_share_balance, KeepAlive)
+		.map_err(|_| DispatchError::Other("Can't make farmer share transfer"))?;
+		
+
+		// Transfer to sales account if applied
+		let certified_sales_share_u128 = certified_sales_share.ceil().to_num::<u128>();
+		if certified_sales_share > 0 {
+			let sales_share_balance = BalanceOf::<T>::saturated_from(certified_sales_share_u128);
+			debug::info!("Transfering: {:?} from contract twin {:?} to foundation account {:?}", &sales_share_balance, &twin.account_id, &pricing_policy.certified_sales_account);
+			T::Currency::transfer(&twin.account_id, &pricing_policy.certified_sales_account, sales_share_balance, KeepAlive)
+				.map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
+		}
+			
 		Ok(())
 	}
 
 	// Calculates the discount that will be applied to the billing of the contract
 	// Returns an amount due as balance object and a static string indicating which kind of discount it received
 	// (default, bronze, silver, gold or none)
-	fn _calculate_discount(amount_due: BalanceOf<T>, balance: u128) -> (BalanceOf<T>, types::DiscountLevel) {
+	fn _calculate_discount(amount_due: BalanceOf<T>, balance: u128, certification_type: pallet_tfgrid_types::CertificationType) -> (BalanceOf<T>, types::DiscountLevel) {
 		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
 		// calculate amount due on a monthly basis
 		// we bill every one hour so we can infer the amount due monthly (30 days ish)
@@ -425,7 +477,13 @@ impl<T: Config> Module<T> {
 		};
 		
 		// calculate the new amount due given the discount
-		let amount_due = U64F64::from_num(amount_due_as_u128) * discount_received.price_multiplier();
+		let mut amount_due = U64F64::from_num(amount_due_as_u128) * discount_received.price_multiplier();
+
+		// Certified capacity costs 25% more
+		if certification_type == pallet_tfgrid_types::CertificationType::Certified {
+			amount_due = amount_due * U64F64::from_num(1.25);
+		}
+
 		// convert to balance object
 		let amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(amount_due.ceil().to_num::<u64>());
 
@@ -435,7 +493,7 @@ impl<T: Config> Module<T> {
 	// Reinserts a contract by id at the next interval we need to bill the contract
 	pub fn _reinsert_contract_to_bill(contract_id: u64) -> DispatchResult {
 		let now = <frame_system::Module<T>>::block_number().saturated_into::<u64>();
-		// Save the contract to be billed in X blocks
+		// Save the contract to be billed in now + BILLING_FREQUENCY_IN_BLOCKS
 		let future_block = now + BILLING_FREQUENCY_IN_BLOCKS;
 		let mut contracts = ContractsToBillAt::get(future_block);
 		contracts.push(contract_id);
@@ -444,6 +502,7 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
+	// Helper function that updates the contract state and manages storage accordingly
 	pub fn _update_contract_state(mut contract: types::NodeContract, state: types::ContractState) -> DispatchResult {
 		// Remove contract from double map first
 		let mut contracts = NodeContracts::get(&contract.node_id, &contract.state);
