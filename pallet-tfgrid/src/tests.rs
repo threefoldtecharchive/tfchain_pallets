@@ -1,5 +1,6 @@
 use crate::{mock::*, Error};
 use frame_support::{assert_noop, assert_ok};
+use frame_system::{RawOrigin};
 
 #[test]
 fn test_create_entity_works() {
@@ -461,7 +462,6 @@ fn node_report_uptime_works() {
 		});
 		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
 
-
 		// random location
 		let location = super::types::Location{
 			longitude: "12.233213231".as_bytes().to_vec(),
@@ -527,5 +527,68 @@ fn create_node_with_same_pubkey_fails() {
 			TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, 0, 0, None),
 			Error::<TestRuntime>::NodeWithTwinIdExists
 		);
+	});
+}
+
+#[test]
+fn create_farming_policy_works() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "test".as_bytes().to_vec();
+
+		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Diy));
+	});
+}
+
+#[test]
+fn node_auto_attach_farming_policy() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+
+		let ip = "10.2.3.3";
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
+		let farm_name = "test_farm";
+		let mut pub_ips = Vec::new();
+		pub_ips.push(super::types::PublicIP{
+			ip: "1.1.1.0".as_bytes().to_vec(),
+			gateway: "1.1.1.1".as_bytes().to_vec(),
+			contract_id: 0
+		});
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
+
+		// Create farming policies first
+		let name = "d1_test".as_bytes().to_vec();
+		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Diy));
+		let name = "c1_test".as_bytes().to_vec();
+		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Certified));
+		let name = "d2_test".as_bytes().to_vec();
+		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Diy));
+		let name = "c2_test".as_bytes().to_vec();
+		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Certified));
+
+		// random location
+		let location = super::types::Location{
+			longitude: "12.233213231".as_bytes().to_vec(),
+			latitude: "32.323112123".as_bytes().to_vec()
+		};
+
+		let resources = super::types::Resources {
+			hru: 1,
+			sru: 1,
+			cru: 1,
+			mru: 1,
+		};
+
+		assert_ok!(TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, 0, 0, None));
+
+		let node = TfgridModule::nodes(1);
+		// farming policy set on the node should be 3
+		// as we created the last DIY policy with id 3
+		assert_eq!(node.farming_policy_id, 3);
 	});
 }

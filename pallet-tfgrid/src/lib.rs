@@ -49,6 +49,9 @@ decl_storage! {
         pub CertificationCodes get(fn certification_codes): map hasher(blake2_128_concat) u32 => types::CertificationCodes;
         pub CertificationCodeIdByName get(fn certification_codes_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
 
+        pub FarmingPolicies get(fn farming_policies): Vec<types::FarmingPolicy>;
+        pub FarmingPolicyIDsByCertificationType get (fn farming_policies_by_certification_type): map hasher(blake2_128_concat) types::CertificationType => Vec<u32>;
+
         // ID maps
         FarmID: u32;
         NodeID: u32;
@@ -56,6 +59,7 @@ decl_storage! {
         TwinID: u32;
         PricingPolicyID: u32;
         CertificationCodeID: u32;
+        FarmingPolicyID: u32;
     }
 }
 
@@ -86,6 +90,7 @@ decl_event!(
 
         PricingPolicyStored(types::PricingPolicy),
         CertificationCodeStored(types::CertificationCodes),
+        FarmingPolicyStored(types::FarmingPolicy),
     }
 );
 
@@ -129,9 +134,7 @@ decl_error! {
         PricingPolicyNotExists,
 
         CertificationCodeExists,
-
-        OffchainSignedTxError,
-        NoLocalAcctForSigning
+        FarmingPolicyAlreadyExists
     }
 }
 
@@ -295,6 +298,7 @@ decl_module! {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
+            let farm = Farms::get(farm_id);
             ensure!(TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
             let twin_id = TwinIdByAccountID::<T>::get(&account_id);
 
@@ -302,6 +306,19 @@ decl_module! {
 
             let mut id = NodeID::get();
             id = id+1;
+
+            // Attach a farming policy to a node
+            // We first filter on Policies by certification type of the farm
+            // If there are policies set by us, attach the last on in the list
+            // This list is updated with new policies when we change the farming rules, so we want new nodes
+            // to always use the latest farming policy (last one in the list)
+            let farming_policies = FarmingPolicyIDsByCertificationType::get(farm.certification_type);
+            let mut farming_policy_id = 0;
+            if farming_policies.len() > 0 {
+                farming_policy_id = farming_policies[farming_policies.len() -1]; 
+            }
+
+            let created = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 
             let new_node = types::Node {
                 version: TFGRID_VERSION,
@@ -314,6 +331,8 @@ decl_module! {
                 city_id,
                 public_config,
                 uptime: 0,
+                created,
+                farming_policy_id,
             };
 
             Nodes::insert(id, &new_node);
@@ -694,7 +713,7 @@ decl_module! {
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_certification_code(origin, name: Vec<u8>, description: Vec<u8>, certification_code_type: types::CertificationCodeType) -> dispatch::DispatchResult {
-            let _ = ensure_signed(origin)?;
+            let _ = ensure_root(origin)?;
 
             ensure!(!CertificationCodeIdByName::contains_key(&name), Error::<T>::CertificationCodeExists);
 
@@ -716,6 +735,51 @@ decl_module! {
             Self::deposit_event(RawEvent::CertificationCodeStored(certification_code));
 
             Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn create_farming_policy(origin, name: Vec<u8>, su: u32, cu: u32, nu: u32, ipv4: u32, certification_type: types::CertificationType) -> dispatch::DispatchResult {
+            let _ = ensure_root(origin)?;
+
+            let mut id = FarmingPolicyID::get();
+            id = id+1;
+
+            let mut farming_policies = FarmingPolicies::get();
+
+            let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+
+            let new_policy = types::FarmingPolicy {
+                version: TFGRID_VERSION,
+                id,
+                name,
+                su,
+                cu,
+                nu,
+                ipv4,
+                timestamp: now,
+                certification_type,
+            };
+
+            
+            // We don't want to add duplicate farming_policies, so we check whether it exists, if so return error
+            match farming_policies.binary_search(&new_policy) {
+                Ok(_) => Err(Error::<T>::FarmingPolicyAlreadyExists.into()),
+                Err(index) => {
+                    // Object does not exists, save it
+                    farming_policies.insert(index, new_policy.clone());
+                    FarmingPolicies::put(farming_policies);
+                    FarmingPolicyID::put(id);
+
+                    // add in the map to quickly filter farming policy ids by certificationtype
+                    let mut farming_policy_ids_by_certification_type = FarmingPolicyIDsByCertificationType::get(certification_type);
+                    farming_policy_ids_by_certification_type.push(id);
+                    FarmingPolicyIDsByCertificationType::insert(certification_type, farming_policy_ids_by_certification_type);
+
+                    Self::deposit_event(RawEvent::FarmingPolicyStored(new_policy));
+
+                    Ok(())
+                }
+            }
         }
     }
 }

@@ -50,6 +50,8 @@ pub struct Node {
     // optional public config
     pub public_config: Option<PublicConfig>,
     pub uptime: u64,
+    pub created: u64,
+    pub farming_policy_id: u32,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -158,4 +160,17 @@ impl Default for CertificationType {
     fn default() -> CertificationType {
         CertificationType::Diy
     }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct FarmingPolicy {
+    pub version: u32,
+    pub id: u32,
+    pub name: Vec<u8>,
+    pub cu: u32,
+    pub su: u32,
+    pub nu: u32,
+    pub ipv4: u32,
+    pub timestamp: u64,
+    pub certification_type: CertificationType
 }
