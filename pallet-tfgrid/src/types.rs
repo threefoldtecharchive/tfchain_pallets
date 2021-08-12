@@ -48,7 +48,8 @@ pub struct Node {
     pub country_id: u32,
     pub city_id: u32,
     // optional public config
-    pub public_config: Option<PublicConfig>
+    pub public_config: Option<PublicConfig>,
+    pub uptime: u64,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]

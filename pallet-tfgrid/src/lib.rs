@@ -6,19 +6,22 @@
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
 };
+use sp_runtime::{traits::SaturatedConversion};
 use frame_system::{self as system, ensure_signed, ensure_root};
-
 use hex::FromHex;
-
 use codec::Encode;
 use sp_std::prelude::*;
+use pallet_timestamp as timestamp;
 
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod mock;
+
 pub mod types;
 
-pub trait Config: system::Config {
+pub trait Config: system::Config + timestamp::Config  {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
@@ -68,6 +71,7 @@ decl_event!(
         NodeStored(types::Node),
         NodeUpdated(types::Node),
         NodeDeleted(u32),
+        NodeUptimeReported(u32, u64, u64),
 
         EntityStored(types::Entity<AccountId>),
         EntityUpdated(types::Entity<AccountId>),
@@ -308,7 +312,8 @@ decl_module! {
                 location,
                 country_id,
                 city_id,
-                public_config
+                public_config,
+                uptime: 0,
             };
 
             Nodes::insert(id, &new_node);
@@ -346,6 +351,29 @@ decl_module! {
             Nodes::insert(stored_node.id, &stored_node);
 
             Self::deposit_event(RawEvent::NodeUpdated(stored_node));
+
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn report_uptime(origin, uptime: u64) -> dispatch::DispatchResult {
+            let account_id = ensure_signed(origin)?;
+
+            ensure!(TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
+            let twin_id = TwinIdByAccountID::<T>::get(account_id);
+
+            ensure!(NodeIdByTwinID::contains_key(twin_id), Error::<T>::TwinNotExists);
+            let node_id = NodeIdByTwinID::get(twin_id);
+
+            ensure!(Nodes::contains_key(node_id), Error::<T>::NodeNotExists);
+            let mut stored_node = Nodes::get(node_id);
+
+            stored_node.uptime = uptime;
+            Nodes::insert(node_id, stored_node);
+
+            let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+
+            Self::deposit_event(RawEvent::NodeUptimeReported(node_id, now, uptime));
 
             Ok(())
         }

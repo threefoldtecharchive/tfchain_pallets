@@ -1,162 +1,5 @@
-use crate::{self as tfgridModule, Config, Error};
-use frame_support::{assert_noop, assert_ok, construct_runtime, parameter_types};
-use sp_io::TestExternalities;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
-
-use sp_core::{H256, Pair, Public, ed25519, sr25519};
-
-use sp_std::prelude::*;
-
-use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_runtime::{
-	MultiSignature,
-};
-
-use hex;
-
-pub type Signature = MultiSignature;
-
-pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>;
-type Block = frame_system::mocking::MockBlock<TestRuntime>;
-
-construct_runtime!(
-	pub enum TestRuntime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		TfgridModule: tfgridModule::{Module, Call, Storage, Event<T>},
-	}
-);
-
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
-}
-
-impl frame_system::Config for TestRuntime {
-	type BaseCallFilter = ();
-	type BlockWeights = ();
-	type BlockLength = ();
-	type Origin = Origin;
-	type Index = u64;
-	type Call = Call;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type DbWeight = ();
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
-}
-
-impl Config for TestRuntime {
-	type Event = Event;
-}
-
-struct ExternalityBuilder;
-
-impl ExternalityBuilder {
-	pub fn build() -> TestExternalities {
-		let storage = frame_system::GenesisConfig::default()
-			.build_storage::<TestRuntime>()
-			.unwrap();
-		let mut ext = TestExternalities::from(storage);
-		ext.execute_with(|| System::set_block_number(1));
-		ext
-	}
-}
-type AccountPublic = <MultiSignature as Verify>::Signer;
-
-
-// industry dismiss casual gym gap music pave gasp sick owner dumb cost
-
-/// Helper function to generate a crypto pair from seed
-fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-	TPublic::Pair::from_string(&format!("//{}", seed), None)
-		.expect("static values are valid; qed")
-		.public()
-}
-
-fn get_from_seed_string<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-	TPublic::Pair::from_string(&format!("{}", seed), None)
-		.expect("static values are valid; qed")
-		.public()
-}
-
-/// Helper function to generate an account ID from seed
-fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
-AccountPublic: From<<TPublic::Pair as Pair>::Public>
-{
-	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
-}
-
-fn get_account_id_from_seed_string<TPublic: Public>(seed: &str) -> AccountId where
-AccountPublic: From<<TPublic::Pair as Pair>::Public>
-{
-	AccountPublic::from(get_from_seed_string::<TPublic>(seed)).into_account()
-}
-
-fn alice() -> AccountId {
-	get_account_id_from_seed::<sr25519::Public>("Alice")
-}
-
-// fn alice_ed25519() -> AccountId {
-// 	get_account_id_from_seed::<ed25519::Public>("Alice")
-// }
-
-fn test_ed25519() -> AccountId {
-	get_account_id_from_seed_string::<ed25519::Public>("industry dismiss casual gym gap music pave gasp sick owner dumb cost")
-}
-
-fn bob() -> AccountId {
-	get_account_id_from_seed::<sr25519::Public>("Bob")
-}
-
-fn sign_create_entity(name: Vec<u8>, country_id: u32, city_id: u32) -> Vec<u8> {
-	let seed = hex::decode("59336423ee7af732b2d4a76e440651e33e5ba51540e5633535b9030492c2a6f6").unwrap();
-	let pair = ed25519::Pair::from_seed_slice(&seed).unwrap();
-
-	let mut message = vec![];
-	message.extend_from_slice(&name);
-	message.extend_from_slice(&country_id.to_be_bytes());
-	message.extend_from_slice(&city_id.to_be_bytes());
-
-	let signature = pair.sign(&message);
-
-	// hex encode signature
-	hex::encode(signature.0.to_vec()).into()
-}
-
-fn sign_add_entity_to_twin(entity_id: u32, twin_id: u32) -> Vec<u8> {
-	let seed = hex::decode("59336423ee7af732b2d4a76e440651e33e5ba51540e5633535b9030492c2a6f6").unwrap();
-	let pair = ed25519::Pair::from_seed_slice(&seed).unwrap();
-
-	let mut message = vec![];
-	message.extend_from_slice(&entity_id.to_be_bytes());
-	message.extend_from_slice(&twin_id.to_be_bytes());
-
-	let signature = pair.sign(&message);
-
-	// hex encode signature
-	hex::encode(signature.0.to_vec()).into()
-}
+use crate::{mock::*, Error};
+use frame_support::{assert_noop, assert_ok};
 
 #[test]
 fn test_create_entity_works() {
@@ -593,6 +436,52 @@ fn create_node_works() {
 		};
 
 		assert_ok!(TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, 0, 0, None));
+	});
+}
+
+#[test]
+fn node_report_uptime_works() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "foobar";
+
+		// Someone first creates an entity
+		let signature = sign_create_entity(name.as_bytes().to_vec(), 0, 0);
+
+		assert_ok!(TfgridModule::create_entity(Origin::signed(alice()), test_ed25519(), name.as_bytes().to_vec(), 0,0, signature.clone()));
+
+		let ip = "10.2.3.3";
+		assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()));
+
+		let farm_name = "test_farm";
+		let mut pub_ips = Vec::new();
+		pub_ips.push(super::types::PublicIP{
+			ip: "1.1.1.0".as_bytes().to_vec(),
+			gateway: "1.1.1.1".as_bytes().to_vec(),
+			contract_id: 0
+		});
+		assert_ok!(TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), super::types::CertificationType::Diy, 0, 0, pub_ips.clone()));
+
+
+		// random location
+		let location = super::types::Location{
+			longitude: "12.233213231".as_bytes().to_vec(),
+			latitude: "32.323112123".as_bytes().to_vec()
+		};
+
+		let resources = super::types::Resources {
+			hru: 1,
+			sru: 1,
+			cru: 1,
+			mru: 1,
+		};
+
+		assert_ok!(TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, 0, 0, None));
+
+		Timestamp::set_timestamp(1628082000);
+		assert_ok!(TfgridModule::report_uptime(Origin::signed(alice()), 500));
+
+		let node = TfgridModule::nodes(1);
+		assert_eq!(node.uptime, 500);
 	});
 }
 
