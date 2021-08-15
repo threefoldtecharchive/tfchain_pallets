@@ -7,7 +7,7 @@ use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
 };
 use sp_runtime::{traits::SaturatedConversion};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
 use hex::FromHex;
 use codec::Encode;
 use sp_std::prelude::*;
@@ -61,6 +61,36 @@ decl_storage! {
         CertificationCodeID: u32;
         FarmingPolicyID: u32;
     }
+
+    add_extra_genesis {
+        config(su_price): types::Policy;
+        config(nu_price): types::Policy;
+        config(ipu_price): types::Policy;
+        config(cu_price): types::Policy;
+        config(foundation_account): T::AccountId;
+        config(sales_account): T::AccountId;
+
+        build(|_config| {
+            let foundation_account = _config.foundation_account.clone();
+            let sales_account = _config.sales_account.clone();
+            let su_price = _config.su_price.clone();
+            let cu_price = _config.cu_price.clone();
+            let nu_price = _config.nu_price.clone();
+            let ipu_price = _config.ipu_price.clone();
+
+            let _ = <Module<T>>::create_pricing_policy(
+                RawOrigin::Root.into(),
+                "threefold_default_pricing_policy".as_bytes().to_vec(),
+                su_price,
+                cu_price,
+                nu_price,
+                ipu_price,
+                foundation_account,
+                sales_account
+            );
+        });
+    }
+
 }
 
 decl_event!(
@@ -654,7 +684,16 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_pricing_policy(origin, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32, foundation_account: T::AccountId, certified_sales_account: T::AccountId) -> dispatch::DispatchResult {
+        pub fn create_pricing_policy(
+            origin,
+            name: Vec<u8>,
+            su: types::Policy,
+            cu: types::Policy,
+            nu: types::Policy,
+            ipu: types::Policy,
+            foundation_account: T::AccountId,
+            certified_sales_account: T::AccountId
+        ) -> dispatch::DispatchResult {
             let _ = ensure_root(origin)?;
 
             ensure!(!PricingPolicyIdByName::contains_key(&name), Error::<T>::PricingPolicyExists);
@@ -667,7 +706,6 @@ decl_module! {
                 version: TFGRID_VERSION,
                 id,
                 name,
-                unit,
                 su,
                 cu,
                 nu,
@@ -686,7 +724,15 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_pricing_policy(origin, id: u32, name: Vec<u8>, unit: types::Unit, su: u32, cu: u32, nu: u32, ipu: u32) -> dispatch::DispatchResult {
+        pub fn update_pricing_policy(
+            origin,
+            id: u32,
+            name: Vec<u8>,
+            su: types::Policy,
+            cu: types::Policy,
+            nu: types::Policy,
+            ipu: types::Policy
+        ) -> dispatch::DispatchResult {
             let _ = ensure_root(origin)?;
 
             ensure!(PricingPolicies::<T>::contains_key(&id), Error::<T>::PricingPolicyNotExists);
@@ -698,7 +744,6 @@ decl_module! {
             }
 
             pricing_policy.name = name;
-            pricing_policy.unit = unit;
             pricing_policy.su = su;
             pricing_policy.cu = cu;
             pricing_policy.nu = nu;

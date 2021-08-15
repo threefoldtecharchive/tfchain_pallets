@@ -138,10 +138,10 @@ fn test_push_consumption_report_works() {
 		let mut consumption_reports = Vec::new();
 		consumption_reports.push(super::types::Consumption{
 			contract_id: 1,
-			cru: 1,
+			cru: 2,
 			hru: 0,
-			mru: 4,
-			sru: 1000000,
+			mru: 4294967296,
+			sru: 21474836480,
 			nru: 500,
 			timestamp: 1628085600
 		});
@@ -153,7 +153,7 @@ fn test_push_consumption_report_works() {
 		assert_ok!(SmartContractModule::add_reports(Origin::signed(alice()), consumption_reports));
 
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-		assert_eq!(contract_billing_info.amount_unbilled, 3);
+		assert_eq!(contract_billing_info.amount_unbilled, 2160071);
 
 		// let mature 10 blocks
 		// because we bill every 10 blocks
@@ -173,7 +173,7 @@ fn test_push_consumption_report_works() {
 		.collect::<Vec<_>>();
 
 		let expected_events = vec![
-			RawEvent::ContractBilled(1, types::DiscountLevel::Gold, 2),
+			RawEvent::ContractBilled(1, types::DiscountLevel::None, 2160071),
 		];
 
 		assert_eq!(our_events[2], expected_events[0]);
@@ -182,13 +182,13 @@ fn test_push_consumption_report_works() {
 		let twin = TfgridModule::twins(1);
 		let b = Balances::free_balance(&twin.account_id);
 		let balances_as_u128: u128 = b.saturated_into::<u128>();
-		assert_eq!(balances_as_u128, 1000000000002);
+		assert_eq!(balances_as_u128, 1000001512050);
 
 		// check the contract owners address to see if it got balance credited
 		let twin = TfgridModule::twins(2);
 		let b = Balances::free_balance(&twin.account_id);
 		let balances_as_u128: u128 = b.saturated_into::<u128>();
-		assert_eq!(balances_as_u128, 2499999998);
+		assert_eq!(balances_as_u128, 2498487950);
 
 		// amount unbilled should have been reset after a transfer between contract owner and farmer
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
@@ -248,7 +248,33 @@ fn prepare_farm_and_node() {
 		contract_id: 0
 	});
 
-	TfgridModule::create_pricing_policy(RawOrigin::Root.into(), "policy_1".as_bytes().to_vec(), pallet_tfgrid_types::Unit::Gigabytes, 200, 100, 100, 500, bob(), bob()).unwrap();
+	let su_policy = pallet_tfgrid_types::Policy {
+		value: 300,
+		unit: pallet_tfgrid_types::Unit::Terrabytes,
+	};
+	let nu_policy = pallet_tfgrid_types::Policy {
+		value: 200,
+		unit: pallet_tfgrid_types::Unit::Gigabytes,
+	};
+	let cu_policy = pallet_tfgrid_types::Policy {
+		value: 600,
+		unit: pallet_tfgrid_types::Unit::Gigabytes,
+	};
+	let ipu_policy = pallet_tfgrid_types::Policy {
+		value: 200,
+		unit: pallet_tfgrid_types::Unit::Bytes,
+	};
+
+	TfgridModule::create_pricing_policy(
+		RawOrigin::Root.into(),
+		"policy_1".as_bytes().to_vec(),
+		su_policy,
+		cu_policy,
+		nu_policy,
+		ipu_policy,
+		bob(),
+		bob()
+	).unwrap();
 
 	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), pallet_tfgrid_types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
 
