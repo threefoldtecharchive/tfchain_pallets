@@ -108,21 +108,39 @@ pub struct PricingPolicy<AccountId> {
     pub version: u32,
     pub id: u32,
     pub name: Vec<u8>,
-    pub unit: Unit,
-    pub su: u32,
-    pub cu: u32,
-    pub nu: u32,
-    pub ipu: u32,
+    pub su: Policy,
+    pub cu: Policy,
+    pub nu: Policy,
+    pub ipu: Policy,
     pub foundation_account: AccountId,
     pub certified_sales_account: AccountId,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Policy {
+    pub value: u32,
+    pub unit: Unit
+}
+
+impl Policy {
+    pub fn factor(&self) -> u128 {
+        match self.unit {
+            Unit::Bytes => 1,
+            Unit::Kilobytes => 1000,
+            Unit::Megabytes => 1000 * 1000,
+            Unit::Gigabytes => 1000 * 1000 * 1000,
+            Unit::Terrabytes => 1000 * 1000 * 1000 * 1000,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Unit {
     Bytes,
     Kilobytes,
     Megabytes,
-    Gigabytes
+    Gigabytes,
+    Terrabytes
 }
 
 impl Default for Unit {
