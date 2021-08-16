@@ -126,10 +126,10 @@ impl Policy {
     pub fn factor(&self) -> u128 {
         match self.unit {
             Unit::Bytes => 1,
-            Unit::Kilobytes => 1024,
-            Unit::Megabytes => 1024 * 1024,
-            Unit::Gigabytes => 1024 * 1024 * 1024,
-            Unit::Terrabytes => 1024 * 1024 * 1024 * 1024,
+            Unit::Kilobytes => 1000,
+            Unit::Megabytes => 1000 * 1000,
+            Unit::Gigabytes => 1000 * 1000 * 1000,
+            Unit::Terrabytes => 1000 * 1000 * 1000 * 1000,
         }
     }
 }

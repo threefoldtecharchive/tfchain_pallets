@@ -43,8 +43,8 @@ decl_event!(
     {
 		ContractCreated(types::NodeContract),
 		ContractUpdated(types::NodeContract),
-		IPsReserved(u64, Vec<pallet_tfgrid_types::PublicIP>),
 		ContractCanceled(u64),
+		IPsReserved(u64, Vec<pallet_tfgrid_types::PublicIP>),
 		IPsFreed(u64, Vec<Vec<u8>>),
 		ContractDeployed(u64, AccountId),
 		ConsumptionReportReceived(types::Consumption),
@@ -288,7 +288,9 @@ impl<T: Config> Module<T> {
 		let mru = U64F64::from_num(report.mru) / pricing_policy.cu.factor();
 
 		let su_used = hru / 1200 + sru / 300;
-		let su_cost = U64F64::from_num(pricing_policy.su.value) * U64F64::from_num(seconds_elapsed) * su_used;
+		// the pricing policy su cost value is expressed in 1 hours or 3600 seconds.
+		// we bill every 3600 seconds but here we need to calculate the cost per second and multiply it by the seconds elapsed since last report. 
+		let su_cost = (U64F64::from_num(pricing_policy.su.value) / 3600) * U64F64::from_num(seconds_elapsed) * su_used;
 		debug::info!("su cost: {:?}", su_cost);
 
 		let mru_used = mru / 4;
@@ -298,7 +300,7 @@ impl<T: Config> Module<T> {
 		} else {
 			cru_used
 		};
-		let cu_cost = U64F64::from_num(pricing_policy.cu.value) * U64F64::from_num(seconds_elapsed) * min;
+		let cu_cost = (U64F64::from_num(pricing_policy.cu.value) / 3600) * U64F64::from_num(seconds_elapsed) * min;
 		debug::info!("cu cost: {:?}", cu_cost);
 
 		let mut used_nru = U64F64::from_num(report.nru) / pricing_policy.nu.factor();
@@ -308,7 +310,7 @@ impl<T: Config> Module<T> {
 			used_nru -= U64F64::from_num(contract_billing_info.previous_nu_reported);
 
 			// calculate the cost for nru based on the used nru
-			used_nru * U64F64::from_num(pricing_policy.nu.value)
+			used_nru * (U64F64::from_num(pricing_policy.nu.value) / 3600)
 		} else {
 			U64F64::from_num(0)
 		};
