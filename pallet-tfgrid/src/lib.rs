@@ -731,7 +731,9 @@ decl_module! {
             su: types::Policy,
             cu: types::Policy,
             nu: types::Policy,
-            ipu: types::Policy
+            ipu: types::Policy,
+            foundation_account: T::AccountId,
+            certified_sales_account: T::AccountId
         ) -> dispatch::DispatchResult {
             let _ = ensure_root(origin)?;
 
@@ -748,6 +750,8 @@ decl_module! {
             pricing_policy.cu = cu;
             pricing_policy.nu = nu;
             pricing_policy.ipu = ipu;
+            pricing_policy.foundation_account = foundation_account;
+            pricing_policy.certified_sales_account = certified_sales_account;
 
             PricingPolicies::<T>::insert(&id, &pricing_policy);
             PricingPolicyIdByName::insert(&pricing_policy.name, &id);
