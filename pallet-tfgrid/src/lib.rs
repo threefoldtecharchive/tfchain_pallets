@@ -62,34 +62,34 @@ decl_storage! {
         FarmingPolicyID: u32;
     }
 
-    add_extra_genesis {
-        config(su_price): types::Policy;
-        config(nu_price): types::Policy;
-        config(ipu_price): types::Policy;
-        config(cu_price): types::Policy;
-        config(foundation_account): T::AccountId;
-        config(sales_account): T::AccountId;
+    // add_extra_genesis {
+    //     config(su_price): types::Policy;
+    //     config(nu_price): types::Policy;
+    //     config(ipu_price): types::Policy;
+    //     config(cu_price): types::Policy;
+    //     config(foundation_account): T::AccountId;
+    //     config(sales_account): T::AccountId;
 
-        build(|_config| {
-            let foundation_account = _config.foundation_account.clone();
-            let sales_account = _config.sales_account.clone();
-            let su_price = _config.su_price.clone();
-            let cu_price = _config.cu_price.clone();
-            let nu_price = _config.nu_price.clone();
-            let ipu_price = _config.ipu_price.clone();
+    //     build(|_config| {
+    //         let foundation_account = _config.foundation_account.clone();
+    //         let sales_account = _config.sales_account.clone();
+    //         let su_price = _config.su_price.clone();
+    //         let cu_price = _config.cu_price.clone();
+    //         let nu_price = _config.nu_price.clone();
+    //         let ipu_price = _config.ipu_price.clone();
 
-            let _ = <Module<T>>::create_pricing_policy(
-                RawOrigin::Root.into(),
-                "threefold_default_pricing_policy".as_bytes().to_vec(),
-                su_price,
-                cu_price,
-                nu_price,
-                ipu_price,
-                foundation_account,
-                sales_account
-            );
-        });
-    }
+    //         let _ = <Module<T>>::create_pricing_policy(
+    //             RawOrigin::Root.into(),
+    //             "threefold_default_pricing_policy".as_bytes().to_vec(),
+    //             su_price,
+    //             cu_price,
+    //             nu_price,
+    //             ipu_price,
+    //             foundation_account,
+    //             sales_account
+    //         );
+    //     });
+    // }
 
 }
 

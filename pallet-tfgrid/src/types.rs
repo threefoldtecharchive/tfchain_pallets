@@ -116,7 +116,7 @@ pub struct PricingPolicy<AccountId> {
     pub certified_sales_account: AccountId,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Policy {
     pub value: u32,
     pub unit: Unit
@@ -134,7 +134,7 @@ impl Policy {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
 pub enum Unit {
     Bytes,
     Kilobytes,
