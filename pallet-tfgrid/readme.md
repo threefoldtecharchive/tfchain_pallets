@@ -1,6 +1,6 @@
-# Substrate Pallet Tfgrid
+# TFChain Pallet Tfgrid
 
-Pallet for tfgrid database functionality.
+Pallet for tfgrid objects database functionality.
 
 ## Building
 
@@ -9,6 +9,10 @@ Pallet for tfgrid database functionality.
 ## Testing
 
 `cargo test`
+
+## Spec
+
+[alt](./spec.md)
 
 ## Diagram
 
