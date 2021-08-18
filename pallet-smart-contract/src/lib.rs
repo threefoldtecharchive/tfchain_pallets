@@ -30,7 +30,7 @@ pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Con
 }
 
 pub const CONTRACT_VERSION: u32 = 1;
-// when a contract needs to be billed frequency
+// Frequency of contract billing in number of blocks
 pub const BILLING_FREQUENCY_IN_BLOCKS: u64 = 60;
 
 pub type BalanceOf<T> =
@@ -48,7 +48,7 @@ decl_event!(
 		IPsFreed(u64, Vec<Vec<u8>>),
 		ContractDeployed(u64, AccountId),
 		ConsumptionReportReceived(types::Consumption),
-		ContractBilled(u64, types::DiscountLevel, u128),
+		ContractBilled(types::ContractBill),
 		NameRegistered(types::NameRegistration),
 	}
 );
@@ -255,21 +255,7 @@ impl<T: Config> Module<T> {
 		}
 
 		for report in reports {
-			if !ContractBillingInformationByID::contains_key(report.contract_id) {
-				continue;
-			}
-
-			let mut contract_billing_info = ContractBillingInformationByID::get(report.contract_id);
-			if report.timestamp < contract_billing_info.last_updated {
-				continue;
-			}
-
-			let total = Self::_calculate_report_cost(&report, &contract_billing_info, &pricing_policy);
-
-			// update contract_billing_info
-			contract_billing_info.amount_unbilled += total;
-			contract_billing_info.last_updated = report.timestamp;
-			ContractBillingInformationByID::insert(report.contract_id, &contract_billing_info);
+			Self::_calculate_report_cost(&report, &pricing_policy)?;
 			Self::deposit_event(RawEvent::ConsumptionReportReceived(report));
 		}
 
@@ -278,8 +264,17 @@ impl<T: Config> Module<T> {
 
 	// Calculates the total cost of a report.
 	// Takes in a report, the contract's billing information and the linked farm's pricing policy.
-	// Returns a positive integer which represents the cost in tokens 
-	pub fn _calculate_report_cost(report: &types::Consumption, contract_billing_info: &types::ContractBillingInformation, pricing_policy: &pallet_tfgrid_types::PricingPolicy<T::AccountId>) -> u64 {
+	// Updates the contract's billing information in storage
+	pub fn _calculate_report_cost(
+		report: &types::Consumption,
+		pricing_policy: &pallet_tfgrid_types::PricingPolicy<T::AccountId>
+	) -> DispatchResult {
+		ensure!(ContractBillingInformationByID::contains_key(report.contract_id), Error::<T>::ContractNotExists);
+		let mut contract_billing_info = ContractBillingInformationByID::get(report.contract_id);
+		if report.timestamp < contract_billing_info.last_updated {
+			return Ok(());
+		}
+
 		let seconds_elapsed = report.timestamp - contract_billing_info.last_updated;
 		debug::info!("seconds elapsed: {:?}", seconds_elapsed);
 
@@ -322,7 +317,13 @@ impl<T: Config> Module<T> {
 		let total = total.ceil().to_num::<u64>();
 		debug::info!("total cost: {:?}", total);
 
-		total
+		contract_billing_info.previous_nu_reported = used_nru.ceil().to_num::<u64>();
+		contract_billing_info.amount_unbilled += total;
+		contract_billing_info.last_updated = report.timestamp;
+
+		ContractBillingInformationByID::insert(report.contract_id, &contract_billing_info);
+
+		Ok(())
 	}
 
 	pub fn _bill_contracts_at_block(block: T::BlockNumber) -> DispatchResult {
@@ -358,39 +359,46 @@ impl<T: Config> Module<T> {
 
 		let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(farm.pricing_policy_id);
 		
-		// bill user for 1 hour ip usage (10 blocks * 6 seconds)
-		let total_ip_cost = contract.public_ips * pricing_policy.ipu.value * (BILLING_FREQUENCY_IN_BLOCKS as u32 * 6);
+		// bill user for 1 hour ip usage (60 blocks * 60 seconds)
+		let total_ip_cost = contract.public_ips * pricing_policy.ipu.value * (BILLING_FREQUENCY_IN_BLOCKS as u32 * 60);
 		
 		let mut contract_billing_info = ContractBillingInformationByID::get(contract.contract_id);
-		let total = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
+		let total_cost = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
 
-		if total == 0 {
+		// If cost is 0, reinsert to be billed at next interval
+		if total_cost == 0 {
 			Self::_reinsert_contract_to_bill(contract.contract_id)?;
 			return Ok(())
 		}
 
-		// get the contracts free balance
+		// get the contract's twin free balance
 		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 		let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
 		debug::info!("free balance: {:?}", balance);
+
+		// Calculate the amount due and discount received based on the total_cost amount due
+		let (mut amount_due, discount_received) = Self::_calculate_discount(total_cost, balance, farm.certification_type);
+		// Convert amount due to u128
+		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
 		
+		// if the total amount due exceeds the twin's balance, decomission contract
+		// but first drain the account with the amount equal to the balance of that twin
 		let mut decomission = false;
-		let balances_as_u128: u128 = balance.saturated_into::<u128>();
-		// if the total amount due exceeds to the balance decomission contract
-		// but first drain the account
-		if total as u128 >= balances_as_u128 {
+		if amount_due >= balance {
+			amount_due = balance;
 			decomission = true;				
 		}
-
-		// Calculate the amount due and discount received based on the total amount due
-		let (amount_due, discount_received) = Self::_calculate_discount(BalanceOf::<T>::saturated_from(total), balances_as_u128, farm.certification_type);
 
 		// Distribute cultivation rewards
 		Self::_distribute_cultivation_rewards(&contract, &node, &farm, &pricing_policy, amount_due)?;
 
-		// Deposit Event
-		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
-		Self::deposit_event(RawEvent::ContractBilled(contract.contract_id, discount_received, amount_due_as_u128));
+		let contract_bill = types::ContractBill {
+			contract_id: contract.contract_id,
+			timestamp: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
+			discount_level: discount_received.clone(),
+			amount_billed: amount_due_as_u128
+		};
+		Self::deposit_event(RawEvent::ContractBilled(contract_bill));
 
 		// If total balance exceeds the twin's balance, we can decomission contract
 		if decomission {
@@ -466,17 +474,19 @@ impl<T: Config> Module<T> {
 	// Calculates the discount that will be applied to the billing of the contract
 	// Returns an amount due as balance object and a static string indicating which kind of discount it received
 	// (default, bronze, silver, gold or none)
-	fn _calculate_discount(amount_due: BalanceOf<T>, balance: u128, certification_type: pallet_tfgrid_types::CertificationType) -> (BalanceOf<T>, types::DiscountLevel) {
-		let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+	fn _calculate_discount(amount_due: u64, balance: BalanceOf<T>, certification_type: pallet_tfgrid_types::CertificationType) -> (BalanceOf<T>, types::DiscountLevel) {
+		let balance_as_u128: u128 = balance.saturated_into::<u128>();
+
 		// calculate amount due on a monthly basis
 		// we bill every one hour so we can infer the amount due monthly (30 days ish)
-		let amount_due_monthly = amount_due_as_u128 * 24 * 30;
+		let amount_due_monthly = amount_due * 24 * 30;
+
 		// see how many months a user can pay for this deployment given his balance
-		let discount_level = U64F64::from_num(balance) / U64F64::from_num(amount_due_monthly);
+		let discount_level = U64F64::from_num(balance_as_u128) / U64F64::from_num(amount_due_monthly);
 
 		// predefined discount levels
 		// https://wiki.threefold.io/#/threefold__grid_pricing
-		let discount_received = match discount_level.ceil().to_num::<u64>() {
+		let discount_received = match discount_level.floor().to_num::<u64>() {
 			d if d >= 3 && d < 6 => types::DiscountLevel::Default,
 			d if d >= 6 && d < 12 => types::DiscountLevel::Bronze,
 			d if d >= 12 && d < 36 => types::DiscountLevel::Silver,
@@ -485,7 +495,7 @@ impl<T: Config> Module<T> {
 		};
 		
 		// calculate the new amount due given the discount
-		let mut amount_due = U64F64::from_num(amount_due_as_u128) * discount_received.price_multiplier();
+		let mut amount_due = U64F64::from_num(amount_due) * discount_received.price_multiplier();
 
 		// Certified capacity costs 25% more
 		if certification_type == pallet_tfgrid_types::CertificationType::Certified {

@@ -80,6 +80,14 @@ pub struct Consumption {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct ContractBill {
+	pub contract_id: u64,
+	pub timestamp: u64,
+	pub discount_level: DiscountLevel,
+	pub amount_billed: u128
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct NameRegistration {
 	pub name_registration_id: u64,
 	pub twin_id: u32,
