@@ -120,7 +120,7 @@ fn test_cancel_contract_wrong_twins_fails() {
 }
 
 #[test]
-fn test_push_consumption_report_works() {
+fn test_simulate_billing() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 		run_to_block(1);
@@ -173,8 +173,14 @@ fn test_push_consumption_report_works() {
 		})
 		.collect::<Vec<_>>();
 
+		let contract_bill_event = types::ContractBill {
+			contract_id: 1,
+			timestamp: 1628082000,
+			discount_level: types::DiscountLevel::None,
+			amount_billed: 3600017
+		};
 		let expected_events = vec![
-			RawEvent::ContractBilled(1, types::DiscountLevel::None, 3600017),
+			RawEvent::ContractBilled(contract_bill_event),
 		];
 
 		assert_eq!(our_events[2], expected_events[0]);

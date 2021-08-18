@@ -7,7 +7,7 @@ use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
 };
 use sp_runtime::{traits::SaturatedConversion};
-use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use hex::FromHex;
 use codec::Encode;
 use sp_std::prelude::*;
