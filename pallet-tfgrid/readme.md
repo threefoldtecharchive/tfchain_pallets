@@ -12,8 +12,8 @@ Pallet for tfgrid objects database functionality.
 
 ## Spec
 
-[alt](./spec.md)
+[spec](./spec.md)
 
 ## Diagram
 
-[alt](./diagram.png)
+[diagram](./diagram.png)

@@ -12,7 +12,7 @@ Pallet for smart contract functionality.
 
 ## Spec
 
-[alt](./spec.md)
+[spec](./spec.md)
 
 ## Flow Diagram
 
