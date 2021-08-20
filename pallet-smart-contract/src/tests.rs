@@ -280,7 +280,7 @@ fn prepare_farm_and_node() {
 		bob()
 	).unwrap();
 
-	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), pallet_tfgrid_types::CertificationType::Diy, 0, 0, pub_ips.clone()).unwrap();
+	TfgridModule::create_farm(Origin::signed(alice()), farm_name.as_bytes().to_vec(), pub_ips.clone()).unwrap();
 
 	// random location
 	let location = pallet_tfgrid_types::Location{
@@ -295,7 +295,9 @@ fn prepare_farm_and_node() {
 		mru: 1,
 	};
 
-	TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, 0, 0, None).unwrap();
+	let country = "Belgium".as_bytes().to_vec();
+	let city = "Ghent".as_bytes().to_vec();
+	TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None).unwrap();
 }
 
 fn run_to_block(n: u64) {

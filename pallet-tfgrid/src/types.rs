@@ -7,8 +7,8 @@ pub struct Entity<AccountId> {
     pub id: u32,
     pub name: Vec<u8>,
     pub account_id: AccountId,
-    pub country_id: u32,
-    pub city_id: u32,
+    pub country: Vec<u8>,
+    pub city: Vec<u8>,
 }
 
 //digital twin
@@ -32,8 +32,6 @@ pub struct Farm {
     pub twin_id: u32,
     pub pricing_policy_id: u32,
     pub certification_type: CertificationType,
-    pub country_id: u32,
-    pub city_id: u32,
     pub public_ips: Vec<PublicIP>
 }
 
@@ -45,8 +43,8 @@ pub struct Node {
     pub twin_id: u32,
     pub resources: Resources,
     pub location: Location,
-    pub country_id: u32,
-    pub city_id: u32,
+    pub country: Vec<u8>,
+    pub city: Vec<u8>,
     // optional public config
     pub public_config: Option<PublicConfig>,
     pub uptime: u64,
