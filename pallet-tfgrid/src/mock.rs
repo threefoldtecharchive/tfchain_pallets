@@ -132,14 +132,14 @@ pub fn bob() -> AccountId {
 	get_account_id_from_seed::<sr25519::Public>("Bob")
 }
 
-pub fn sign_create_entity(name: Vec<u8>, country_id: u32, city_id: u32) -> Vec<u8> {
+pub fn sign_create_entity(name: Vec<u8>, country: Vec<u8>, city: Vec<u8>) -> Vec<u8> {
 	let seed = hex::decode("59336423ee7af732b2d4a76e440651e33e5ba51540e5633535b9030492c2a6f6").unwrap();
 	let pair = ed25519::Pair::from_seed_slice(&seed).unwrap();
 
 	let mut message = vec![];
 	message.extend_from_slice(&name);
-	message.extend_from_slice(&country_id.to_be_bytes());
-	message.extend_from_slice(&city_id.to_be_bytes());
+	message.extend_from_slice(&country);
+	message.extend_from_slice(&city);
 
 	let signature = pair.sign(&message);
 

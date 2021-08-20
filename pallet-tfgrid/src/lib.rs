@@ -175,7 +175,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_farm(origin, name: Vec<u8>, certification_type: types::CertificationType, country_id: u32, city_id: u32, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
+        pub fn create_farm(origin, name: Vec<u8>, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
             ensure!(!FarmIdByName::contains_key(name.clone()), Error::<T>::FarmExists);
@@ -210,9 +210,7 @@ decl_module! {
                 twin_id,
                 name,
                 pricing_policy_id: 1,
-                certification_type,
-                country_id,
-                city_id,
+                certification_type: types::CertificationType::Diy,
                 public_ips: pub_ips,
             };
 
@@ -226,7 +224,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_farm(origin, id: u32, name: Vec<u8>, pricing_policy_id: u32, certification_type: types::CertificationType, country_id: u32, city_id: u32) -> dispatch::DispatchResult {
+        pub fn update_farm(origin, id: u32, name: Vec<u8>, pricing_policy_id: u32) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
@@ -242,15 +240,26 @@ decl_module! {
 
             stored_farm.name = name.clone();
             stored_farm.pricing_policy_id = pricing_policy_id;
-            stored_farm.certification_type = certification_type;
-            stored_farm.country_id = country_id;
-            stored_farm.city_id = city_id;
 
             Farms::insert(id, &stored_farm);
             FarmIdByName::insert(name, stored_farm.id);
 
             Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
             
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn set_farm_certification(origin, farm_id: u32, certification_type: types::CertificationType) -> dispatch::DispatchResult {
+            let _ = ensure_root(origin)?;
+
+            ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
+            let mut stored_farm = Farms::get(farm_id);
+
+            stored_farm.certification_type = certification_type;
+
+            Farms::insert(farm_id, &stored_farm);
+
             Ok(())
         }
 
@@ -324,7 +333,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country_id: u32, city_id: u32, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
+        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
@@ -357,8 +366,8 @@ decl_module! {
                 twin_id,
                 resources,
                 location,
-                country_id,
-                city_id,
+                country,
+                city,
                 public_config,
                 uptime: 0,
                 created,
@@ -375,7 +384,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country_id: u32, city_id: u32, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
+        pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
@@ -392,8 +401,8 @@ decl_module! {
             stored_node.farm_id = farm_id;
             stored_node.resources = resources;
             stored_node.location = location;
-            stored_node.country_id = country_id;
-            stored_node.city_id = city_id;
+            stored_node.country = country;
+            stored_node.city = city;
             stored_node.public_config = public_config;
 
             // override node in storage
@@ -445,7 +454,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_entity(origin, target: T::AccountId, name: Vec<u8>, country_id: u32, city_id: u32, signature: Vec<u8>) -> dispatch::DispatchResult {
+        pub fn create_entity(origin, target: T::AccountId, name: Vec<u8>, country: Vec<u8>, city: Vec<u8>, signature: Vec<u8>) -> dispatch::DispatchResult {
             let _ = ensure_signed(origin)?;
 
             ensure!(!EntityIdByName::contains_key(&name), Error::<T>::EntityWithNameExists);
@@ -461,8 +470,8 @@ decl_module! {
 
             let mut message = Vec::new();
             message.extend_from_slice(&name);
-            message.extend_from_slice(&country_id.to_be_bytes());
-            message.extend_from_slice(&city_id.to_be_bytes());
+            message.extend_from_slice(&country);
+            message.extend_from_slice(&city);
 
             ensure!(sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519), Error::<T>::EntitySignatureDoesNotMatch);
 
@@ -473,8 +482,8 @@ decl_module! {
                 version: TFGRID_VERSION,
                 id,
                 name: name.clone(),
-                country_id,
-                city_id,
+                country,
+                city,
                 account_id: target.clone(),
             };
 
@@ -489,7 +498,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_entity(origin, name: Vec<u8>, country_id: u32, city_id: u32) -> dispatch::DispatchResult {
+        pub fn update_entity(origin, name: Vec<u8>, country: Vec<u8>, city: Vec<u8>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(!EntityIdByName::contains_key(&name), Error::<T>::EntityWithNameExists);
@@ -506,8 +515,8 @@ decl_module! {
             EntityIdByName::remove(&stored_entity.name);
             
             stored_entity.name = name.clone();
-            stored_entity.country_id = country_id;
-            stored_entity.city_id = city_id;
+            stored_entity.country = country;
+            stored_entity.city = city;
 
             // overwrite entity
             Entities::<T>::insert(&stored_entity_id, &stored_entity);
