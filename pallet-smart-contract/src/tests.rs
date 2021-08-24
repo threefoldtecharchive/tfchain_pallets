@@ -51,7 +51,30 @@ fn test_update_contract_works() {
 
 		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
-		assert_ok!(SmartContractModule::update_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()));
+		assert_ok!(SmartContractModule::update_contract(Origin::signed(alice()), 1, "no_data".as_bytes().to_vec(), "some_other_hash".as_bytes().to_vec()));
+
+		let expected_contract_value = types::NodeContract {
+			node_id: 1,
+			contract_id: 1,
+			deployment_data: "no_data".as_bytes().to_vec(),
+			deployment_hash: "some_other_hash".as_bytes().to_vec(),
+			public_ips: 0,
+			public_ips_list: Vec::new(),
+			state: types::ContractState::Created,
+			twin_id: 1,
+			version: 1
+		};
+
+		let node_contract = SmartContractModule::contracts(1);
+		assert_eq!(node_contract, expected_contract_value);
+
+		let contracts = SmartContractModule::node_contracts(1, types::ContractState::Created);
+		assert_eq!(contracts.len(), 1);
+
+		assert_eq!(contracts[0], expected_contract_value);
+
+		let node_contract_id_by_hash = SmartContractModule::node_contract_by_hash(1, "some_other_hash".as_bytes().to_vec());
+		assert_eq!(node_contract_id_by_hash, 1);
 	});
 }
 

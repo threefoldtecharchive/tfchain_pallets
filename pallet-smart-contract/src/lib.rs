@@ -201,7 +201,9 @@ impl<T: Config> Module<T> {
 
 		contract.deployment_data = deployment_data;
 		contract.deployment_hash = deployment_hash;
-		Contracts::insert(contract_id, &contract);
+		
+		let state = contract.state.clone();
+		Self::_update_contract_state(&mut contract, &state)?;
 
 		Self::deposit_event(RawEvent::ContractUpdated(contract));
 
@@ -222,7 +224,7 @@ impl<T: Config> Module<T> {
 		// remove the contract by hash from storage
 		ContractIDByNodeIDAndHash::remove(contract.node_id, &contract.deployment_hash);
 
-		Self::_update_contract_state(contract, types::ContractState::Deleted)?;
+		Self::_update_contract_state(&mut contract, &types::ContractState::Deleted)?;
 
         Self::deposit_event(RawEvent::ContractCanceled(contract_id));
 
@@ -405,7 +407,7 @@ impl<T: Config> Module<T> {
 			if contract.public_ips > 0 {
 				Self::_free_ip(&mut contract)?;
 			}
-			Self::_update_contract_state(contract, types::ContractState::OutOfFunds)?;
+			Self::_update_contract_state(&mut contract, &types::ContractState::OutOfFunds)?;
 			return Ok(())
 		}
 
@@ -521,27 +523,22 @@ impl<T: Config> Module<T> {
 	}
 
 	// Helper function that updates the contract state and manages storage accordingly
-	pub fn _update_contract_state(mut contract: types::NodeContract, state: types::ContractState) -> DispatchResult {
+	pub fn _update_contract_state(contract: &mut types::NodeContract, state: &types::ContractState) -> DispatchResult {
 		// Remove contract from double map first
 		let mut contracts = NodeContracts::get(&contract.node_id, &contract.state);
 
 		match contracts.iter().position(|ct| ct.contract_id == contract.contract_id) {
 			Some(index) => {
 				contracts.remove(index);
+				contracts.insert(index, contract.clone());
 				NodeContracts::insert(&contract.node_id, &contract.state, &contracts);
 			},
 			None => ()
 		};
 
 		// Assign new state
-		contract.state = state;
-		
-		// Re-insert new values
-		let mut contracts = NodeContracts::get(&contract.node_id, &contract.state);
-		contracts.push(contract.clone());
-		NodeContracts::insert(&contract.node_id, &contract.state, &contracts);
-		
-		Contracts::insert(&contract.contract_id, &contract);
+		contract.state = state.clone();
+		Contracts::insert(&contract.contract_id.clone(), contract);
 		
 		Ok(())
 	}
