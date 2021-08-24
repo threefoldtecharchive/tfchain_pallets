@@ -113,6 +113,24 @@ fn test_cancel_contract_works() {
 		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
 		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
+
+		let expected_contract_value = types::NodeContract {
+			node_id: 1,
+			contract_id: 1,
+			deployment_data: "some_data".as_bytes().to_vec(),
+			deployment_hash: "hash".as_bytes().to_vec(),
+			public_ips: 0,
+			public_ips_list: Vec::new(),
+			state: types::ContractState::Deleted,
+			twin_id: 1,
+			version: 1
+		};
+
+		let node_contract = SmartContractModule::contracts(1);
+		assert_eq!(node_contract, expected_contract_value);
+
+		let contracts = SmartContractModule::node_contracts(1, types::ContractState::Created);
+		assert_eq!(contracts.len(), 0);
 	});
 }
 

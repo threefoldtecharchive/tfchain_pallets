@@ -527,17 +527,22 @@ impl<T: Config> Module<T> {
 		// Remove contract from double map first
 		let mut contracts = NodeContracts::get(&contract.node_id, &contract.state);
 
+		
 		match contracts.iter().position(|ct| ct.contract_id == contract.contract_id) {
 			Some(index) => {
+				// remove contract with state from double map first
 				contracts.remove(index);
+				NodeContracts::insert(&contract.node_id, &contract.state, &contracts);
+
+				// assign new state
+				contract.state = state.clone();
 				contracts.insert(index, contract.clone());
+				// insert contract with new state into double map
 				NodeContracts::insert(&contract.node_id, &contract.state, &contracts);
 			},
 			None => ()
 		};
 
-		// Assign new state
-		contract.state = state.clone();
 		Contracts::insert(&contract.contract_id.clone(), contract);
 		
 		Ok(())
