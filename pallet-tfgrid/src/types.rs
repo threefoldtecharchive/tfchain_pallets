@@ -64,7 +64,8 @@ pub struct PublicConfig {
     pub ipv4: Vec<u8>,
     pub ipv6: Vec<u8>,
     pub gw4: Vec<u8>,
-    pub gw6: Vec<u8>
+    pub gw6: Vec<u8>,
+    pub domain: Vec<u8>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
