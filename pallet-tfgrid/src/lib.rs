@@ -32,6 +32,7 @@ decl_storage! {
     trait Store for Module<T: Config> as TfgridModule {
         pub Farms get(fn farms): map hasher(blake2_128_concat) u32 => types::Farm;
         pub FarmIdByName get(fn farms_by_name_id): map hasher(blake2_128_concat) Vec<u8> => u32;
+        pub FarmPayoutV2AddressByFarmID get(fn farm_payout_address_by_farm_id): map hasher(blake2_128_concat) u32 => Vec<u8>;
 
         pub Nodes get(fn nodes): map hasher(blake2_128_concat) u32 => types::Node;
         pub NodeIdByTwinID get(fn node_by_twin_id): map hasher(blake2_128_concat) u32 => u32;
@@ -121,6 +122,7 @@ decl_event!(
         PricingPolicyStored(types::PricingPolicy<AccountId>),
         CertificationCodeStored(types::CertificationCodes),
         FarmingPolicyStored(types::FarmingPolicy),
+        FarmPayoutV2AddressRegistered(u32, Vec<u8>),
     }
 );
 
@@ -164,7 +166,8 @@ decl_error! {
         PricingPolicyNotExists,
 
         CertificationCodeExists,
-        FarmingPolicyAlreadyExists
+        FarmingPolicyAlreadyExists,
+        FarmPayoutAdressAlreadyRegistered
     }
 }
 
@@ -227,12 +230,13 @@ decl_module! {
         pub fn update_farm(origin, id: u32, name: Vec<u8>, pricing_policy_id: u32) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
 
-            ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
-
             ensure!(TwinIdByAccountID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
             let twin_id = TwinIdByAccountID::<T>::get(&address);
-            let twin = Twins::<T>::get(twin_id);
-            ensure!(twin.account_id == address, Error::<T>::CannotUpdateFarmWrongTwin);
+
+            ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
+            let farm = Farms::get(id);
+
+            ensure!(farm.twin_id == twin_id, Error::<T>::CannotUpdateFarmWrongTwin);
 
             let mut stored_farm = Farms::get(id);
             // Remove stored farm by name and insert new one
@@ -246,6 +250,26 @@ decl_module! {
 
             Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
             
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn add_stellar_payout_v2address(origin, farm_id: u32, stellar_address: Vec<u8>) -> dispatch::DispatchResult {
+            let address = ensure_signed(origin)?;
+
+            ensure!(TwinIdByAccountID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
+            let twin_id = TwinIdByAccountID::<T>::get(&address);
+
+            ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
+            let farm = Farms::get(farm_id);
+
+            ensure!(farm.twin_id == twin_id, Error::<T>::CannotUpdateFarmWrongTwin);
+            
+            ensure!(!FarmPayoutV2AddressByFarmID::contains_key(farm_id), Error::<T>::FarmPayoutAdressAlreadyRegistered);
+            FarmPayoutV2AddressByFarmID::insert(&farm_id, &stellar_address);
+
+            Self::deposit_event(RawEvent::FarmPayoutV2AddressRegistered(farm_id, stellar_address));
+
             Ok(())
         }
 
