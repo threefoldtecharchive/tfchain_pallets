@@ -142,9 +142,19 @@ decl_module! {
 
 impl<T: Config> Module<T> {
 	pub fn _create_contract(account_id: T::AccountId, node_id: u32, deployment_data: Vec<u8>, deployment_hash: Vec<u8>, public_ips: u32) -> DispatchResult {
-		ensure!(!ContractIDByNodeIDAndHash::contains_key(node_id, &deployment_hash), Error::<T>::ContractIsNotUnique);
 		ensure!(pallet_tfgrid::TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
 		ensure!(pallet_tfgrid::Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
+
+		// if the contract with hash and node id exists and it's in any other state then
+		// contractState::Deleted then we don't allow the creation of it.
+		// If it exists we allow the user to "restore" this contract
+		if ContractIDByNodeIDAndHash::contains_key(node_id, &deployment_hash) {
+			let contract_id = ContractIDByNodeIDAndHash::get(node_id, &deployment_hash);
+			let contract = Contracts::get(contract_id);
+			if contract.state != types::ContractState::Deleted {
+				return Err(DispatchError::from(Error::<T>::ContractIsNotUnique))
+			}
+		}
 
 		let mut id = ContractID::get();
 		id = id+1;
@@ -196,7 +206,7 @@ impl<T: Config> Module<T> {
 		ensure!(twin.account_id == account_id, Error::<T>::TwinNotAuthorizedToUpdateContract);
 
 		// remove and reinsert contract id by node id and hash because that hash can have changed
-		ContractIDByNodeIDAndHash::remove(contract.node_id, contract.deployment_data);
+		ContractIDByNodeIDAndHash::remove(contract.node_id, contract.deployment_hash);
 		ContractIDByNodeIDAndHash::insert(contract.node_id, &deployment_hash, contract_id);
 
 		contract.deployment_data = deployment_data;
@@ -537,12 +547,16 @@ impl<T: Config> Module<T> {
 				// assign new state
 				contract.state = state.clone();
 				contracts.insert(index, contract.clone());
-				// insert contract with new state into double map
-				NodeContracts::insert(&contract.node_id, &contract.state, &contracts);
 			},
-			None => ()
+			None => {
+				contracts.push(contract.clone());
+			}
 		};
 
+		// insert contract with new state into double map
+		NodeContracts::insert(&contract.node_id, &contract.state, &contracts);
+
+		// update Contracts storage as well
 		Contracts::insert(&contract.contract_id.clone(), contract);
 		
 		Ok(())

@@ -45,6 +45,23 @@ fn test_create_contract_with_same_hash_and_node_fails() {
 }
 
 #[test]
+fn test_create_contract_which_was_canceled_before_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		let contract_id = SmartContractModule::node_contract_by_hash(1, "hash".as_bytes().to_vec());
+		assert_eq!(contract_id, 1);
+
+		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
+
+		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		let contract_id = SmartContractModule::node_contract_by_hash(1, "hash".as_bytes().to_vec());
+		assert_eq!(contract_id, 2);
+	});
+}
+
+#[test]
 fn test_update_contract_works() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
