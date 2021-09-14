@@ -50,7 +50,6 @@ decl_event!(
 		ContractDeployed(u64, AccountId),
 		ConsumptionReportReceived(types::Consumption),
 		ContractBilled(types::ContractBill),
-		NameRegistered(types::Contract),
 	}
 );
 
@@ -748,7 +747,7 @@ impl<T: Config> Module<T> {
 
 		ContractIDByNameRegistration::insert(name, &contract.contract_id);
 
-		Self::deposit_event(RawEvent::NameRegistered(contract));
+		Self::deposit_event(RawEvent::ContractCreated(contract));
 
 		Ok(())
 	}
