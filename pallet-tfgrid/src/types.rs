@@ -111,6 +111,8 @@ pub struct PricingPolicy<AccountId> {
     pub cu: Policy,
     pub nu: Policy,
     pub ipu: Policy,
+    pub unique_name: Policy,
+    pub domain_name: Policy,
     pub foundation_account: AccountId,
     pub certified_sales_account: AccountId,
 }

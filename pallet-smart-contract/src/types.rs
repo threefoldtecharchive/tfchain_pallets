@@ -5,10 +5,16 @@ use substrate_fixed::types::{U64F64};
 use pallet_tfgrid::types;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct NodeContract {
+pub struct Contract {
 	pub version: u32,
+	pub state: ContractState,
 	pub contract_id: u64,
 	pub twin_id: u32,
+	pub contract_type: ContractData,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct NodeContract {
 	pub node_id: u32,
 	// deployment_data is the encrypted deployment body. This encrypted the deployment with the **USER** public key. 
 	// So only the user can read this data later on (or any other key that he keeps safe).
@@ -17,8 +23,24 @@ pub struct NodeContract {
 	// Hash of the deployment, set by the user
 	pub deployment_hash: Vec<u8>,
     pub public_ips: u32,
-	pub state: ContractState,
 	pub public_ips_list: Vec<types::PublicIP>,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct NameContract {
+	pub name: Vec<u8>
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
+pub enum ContractData {
+	NodeContract(NodeContract),
+	NameContract(NameContract)
+}
+
+impl Default for ContractData {
+	fn default() -> ContractData {
+		ContractData::NodeContract(NodeContract::default())
+	}
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -85,11 +107,4 @@ pub struct ContractBill {
 	pub timestamp: u64,
 	pub discount_level: DiscountLevel,
 	pub amount_billed: u128
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct NameRegistration {
-	pub name_registration_id: u64,
-	pub twin_id: u32,
-	pub name: Vec<u8>,
 }

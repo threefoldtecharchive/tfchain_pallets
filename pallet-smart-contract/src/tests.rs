@@ -13,7 +13,7 @@ fn test_create_contract_works() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 	});
 }
 
@@ -23,7 +23,7 @@ fn test_create_contract_with_undefined_node_fails() {
 		prepare_farm_and_node();
 
 		assert_noop!(
-			SmartContractModule::create_contract(Origin::signed(alice()), 2, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0),
+			SmartContractModule::create_node_contract(Origin::signed(alice()), 2, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0),
 			Error::<TestRuntime>::NodeNotExists
 		);
 	});
@@ -35,10 +35,10 @@ fn test_create_contract_with_same_hash_and_node_fails() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
 		assert_noop!(
-			SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0),
+			SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0),
 			Error::<TestRuntime>::ContractIsNotUnique
 		);
 	});
@@ -49,13 +49,13 @@ fn test_create_contract_which_was_canceled_before_works() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 		let contract_id = SmartContractModule::node_contract_by_hash(1, "hash".as_bytes().to_vec());
 		assert_eq!(contract_id, 1);
 
 		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 		let contract_id = SmartContractModule::node_contract_by_hash(1, "hash".as_bytes().to_vec());
 		assert_eq!(contract_id, 2);
 	});
@@ -66,20 +66,26 @@ fn test_update_contract_works() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
-		assert_ok!(SmartContractModule::update_contract(Origin::signed(alice()), 1, "no_data".as_bytes().to_vec(), "some_other_hash".as_bytes().to_vec()));
+		assert_ok!(SmartContractModule::update_node_contract(Origin::signed(alice()), 1, "no_data".as_bytes().to_vec(), "some_other_hash".as_bytes().to_vec()));
 
-		let expected_contract_value = types::NodeContract {
+		
+		let node_contract = types::NodeContract {
 			node_id: 1,
-			contract_id: 1,
 			deployment_data: "no_data".as_bytes().to_vec(),
 			deployment_hash: "some_other_hash".as_bytes().to_vec(),
 			public_ips: 0,
 			public_ips_list: Vec::new(),
+		};
+		let contract_type = types::ContractData::NodeContract(node_contract);
+
+		let expected_contract_value = types::Contract {
+			contract_id: 1,
 			state: types::ContractState::Created,
 			twin_id: 1,
-			version: 1
+			version: 1,
+			contract_type
 		};
 
 		let node_contract = SmartContractModule::contracts(1);
@@ -101,7 +107,7 @@ fn test_update_contract_not_exists_fails() {
 		prepare_farm_and_node();
 
 		assert_noop!(
-			SmartContractModule::update_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()),
+			SmartContractModule::update_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()),
 			Error::<TestRuntime>::ContractNotExists
 		);
 	});
@@ -112,10 +118,10 @@ fn test_update_contract_wrong_twins_fails() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
 		assert_noop!(
-			SmartContractModule::update_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()),
+			SmartContractModule::update_node_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec()),
 			Error::<TestRuntime>::TwinNotAuthorizedToUpdateContract
 		);
 	});
@@ -127,20 +133,25 @@ fn test_cancel_contract_works() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
 		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
 
-		let expected_contract_value = types::NodeContract {
+		let node_contract = types::NodeContract {
 			node_id: 1,
-			contract_id: 1,
 			deployment_data: "some_data".as_bytes().to_vec(),
 			deployment_hash: "hash".as_bytes().to_vec(),
 			public_ips: 0,
 			public_ips_list: Vec::new(),
+		};
+		let contract_type = types::ContractData::NodeContract(node_contract);
+
+		let expected_contract_value = types::Contract {
+			contract_id: 1,
 			state: types::ContractState::Deleted,
 			twin_id: 1,
-			version: 1
+			version: 1,
+			contract_type
 		};
 
 		let node_contract = SmartContractModule::contracts(1);
@@ -168,7 +179,7 @@ fn test_cancel_contract_wrong_twins_fails() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
 
 		assert_noop!(
 			SmartContractModule::cancel_contract(Origin::signed(bob()), 1),
@@ -178,14 +189,76 @@ fn test_cancel_contract_wrong_twins_fails() {
 }
 
 #[test]
-fn test_simulate_billing() {
+fn test_create_name_contract() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_name_contract(Origin::signed(bob()), "foobar".as_bytes().to_vec()));
+	});
+}
+
+#[test]
+fn test_create_name_contract_double_with_same_name_fails() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_name_contract(Origin::signed(bob()), "foobar".as_bytes().to_vec()));
+		assert_noop!(
+			SmartContractModule::create_name_contract(Origin::signed(alice()), "foobar".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameExists
+		);
+	});
+}
+
+#[test]
+fn test_recreate_name_contract_after_cancel_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_name_contract(Origin::signed(bob()), "foobar".as_bytes().to_vec()));
+
+		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(bob()), 1));
+
+		assert_ok!(SmartContractModule::create_name_contract(Origin::signed(bob()), "foobar".as_bytes().to_vec()));
+	});
+}
+
+#[test]
+fn test_name_registration_fails_with_invalid_dns_name() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_noop!(
+			SmartContractModule::create_name_contract(Origin::signed(alice()), "foo.bar".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+
+		assert_noop!(
+			SmartContractModule::create_name_contract(Origin::signed(alice()), "foo!".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+
+		assert_noop!(
+			SmartContractModule::create_name_contract(Origin::signed(alice()), "foo;'".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+
+		assert_noop!(
+			SmartContractModule::create_name_contract(Origin::signed(alice()), "foo123.%".as_bytes().to_vec()),
+			Error::<TestRuntime>::NameNotValid
+		);
+	});
+}
+
+#[test]
+fn test_node_contract_billing() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
 		run_to_block(1);
 
 		Timestamp::set_timestamp(1628082000 * 1000);
 
-		assert_ok!(SmartContractModule::create_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 1));
 
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
 		assert_eq!(contract_billing_info.last_updated, 1628082000);
@@ -212,7 +285,7 @@ fn test_simulate_billing() {
 		assert_ok!(SmartContractModule::add_reports(Origin::signed(alice()), consumption_reports));
 
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-		assert_eq!(contract_billing_info.amount_unbilled, 3600017);
+		assert_eq!(contract_billing_info.amount_unbilled, 360002);
 
 		// let mature 10 blocks
 		// because we bill every 10 blocks
@@ -234,8 +307,8 @@ fn test_simulate_billing() {
 		let contract_bill_event = types::ContractBill {
 			contract_id: 1,
 			timestamp: 1628082000,
-			discount_level: types::DiscountLevel::None,
-			amount_billed: 3600017
+			discount_level: types::DiscountLevel::Bronze,
+			amount_billed: 322002
 		};
 		let expected_events = vec![
 			RawEvent::ContractBilled(contract_bill_event),
@@ -247,13 +320,13 @@ fn test_simulate_billing() {
 		let twin = TfgridModule::twins(1);
 		let b = Balances::free_balance(&twin.account_id);
 		let balances_as_u128: u128 = b.saturated_into::<u128>();
-		assert_eq!(balances_as_u128, 1000002520012);
+		assert_eq!(balances_as_u128, 1000000225402);
 
 		// check the contract owners address to see if it got balance credited
 		let twin = TfgridModule::twins(2);
 		let b = Balances::free_balance(&twin.account_id);
 		let balances_as_u128: u128 = b.saturated_into::<u128>();
-		assert_eq!(balances_as_u128, 2497479988);
+		assert_eq!(balances_as_u128, 2499774598);
 
 		// amount unbilled should have been reset after a transfer between contract owner and farmer
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
@@ -262,41 +335,51 @@ fn test_simulate_billing() {
 }
 
 #[test]
-fn test_name_registration_works() {
+fn test_name_contract_billing() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
+		run_to_block(1);
 
-		assert_ok!(SmartContractModule::register_name(Origin::signed(alice()), "foobar".as_bytes().to_vec()));
+		Timestamp::set_timestamp(1628082000 * 1000);
+
+		assert_ok!(SmartContractModule::create_name_contract(Origin::signed(bob()), "foobar".as_bytes().to_vec()));
+
+		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
+		assert_eq!(contract_billing_info.last_updated, 1628082000);
+
+		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(61);
+		assert_eq!(contract_to_bill, [1]);
+
+		// let mature 60 blocks
+		// because we bill every 60 blocks
+		run_to_block(62);
+
+		// Test that the expected events were emitted
+		let our_events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| {
+			if let Event::pallet_smart_contract(inner) = e {
+				Some(inner)
+			} else {
+				None
+			}
+		})
+		.collect::<Vec<_>>();
+
+		let contract_bill_event = types::ContractBill {
+			contract_id: 1,
+			timestamp: 1628082000,
+			discount_level: types::DiscountLevel::None,
+			amount_billed: 20000
+		};
+		let expected_events: std::vec::Vec<RawEvent<AccountId>> = vec![
+			RawEvent::ContractBilled(contract_bill_event),
+		];
+		assert_eq!(our_events[1], expected_events[0]);
+
 	});
 }
-
-#[test]
-fn test_name_registration_fails_with_invalid_dns_name() {
-	new_test_ext().execute_with(|| {
-		prepare_farm_and_node();
-
-		assert_noop!(
-			SmartContractModule::register_name(Origin::signed(alice()), "foo.bar".as_bytes().to_vec()),
-			Error::<TestRuntime>::NameNotValid
-		);
-
-		assert_noop!(
-			SmartContractModule::register_name(Origin::signed(alice()), "foo!".as_bytes().to_vec()),
-			Error::<TestRuntime>::NameNotValid
-		);
-
-		assert_noop!(
-			SmartContractModule::register_name(Origin::signed(alice()), "foo;'".as_bytes().to_vec()),
-			Error::<TestRuntime>::NameNotValid
-		);
-
-		assert_noop!(
-			SmartContractModule::register_name(Origin::signed(alice()), "foo123.%".as_bytes().to_vec()),
-			Error::<TestRuntime>::NameNotValid
-		);
-	});
-}
-
 
 fn prepare_farm_and_node() {
 	let ip = "10.2.3.3";
@@ -314,18 +397,29 @@ fn prepare_farm_and_node() {
 	});
 
 	let su_policy = pallet_tfgrid_types::Policy {
-		value: 3000000,
+		value: 300000,
 		unit: pallet_tfgrid_types::Unit::Gigabytes,
 	};
 	let nu_policy = pallet_tfgrid_types::Policy {
-		value: 20000,
+		value: 2000,
 		unit: pallet_tfgrid_types::Unit::Gigabytes,
 	};
 	let cu_policy = pallet_tfgrid_types::Policy {
-		value: 6000000,
+		value: 600000,
 		unit: pallet_tfgrid_types::Unit::Gigabytes,
 	};
-	let ipu_policy = pallet_tfgrid_types::Policy::default();
+	let ipu_policy = pallet_tfgrid_types::Policy {
+		value: 100000,
+		unit: pallet_tfgrid_types::Unit::Gigabytes,
+	};
+	let unique_name_policy = pallet_tfgrid_types::Policy {
+		value: 20000,
+		unit: pallet_tfgrid_types::Unit::Gigabytes,
+	};
+	let domain_name_policy = pallet_tfgrid_types::Policy {
+		value: 40000,
+		unit: pallet_tfgrid_types::Unit::Gigabytes,
+	};
 
 	TfgridModule::create_pricing_policy(
 		RawOrigin::Root.into(),
@@ -334,6 +428,8 @@ fn prepare_farm_and_node() {
 		cu_policy,
 		nu_policy,
 		ipu_policy,
+		unique_name_policy,
+		domain_name_policy,
 		bob(),
 		bob()
 	).unwrap();
