@@ -190,16 +190,6 @@ pub enum CertificationType {
     Certified,
 }
 
-impl CertificationType {
-    pub fn from_u32(number: u32) -> CertificationType {
-        match number {
-            1 => CertificationType::Diy,
-            2 => CertificationType::Certified,
-            _ => CertificationType::default()
-        }
-    }
-}
-
 impl Default for CertificationType {
     fn default() -> CertificationType {
         CertificationType::Diy
