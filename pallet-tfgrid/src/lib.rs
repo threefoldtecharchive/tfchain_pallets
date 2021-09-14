@@ -724,6 +724,8 @@ decl_module! {
             cu: types::Policy,
             nu: types::Policy,
             ipu: types::Policy,
+            unique_name: types::Policy,
+            domain_name: types::Policy,
             foundation_account: T::AccountId,
             certified_sales_account: T::AccountId
         ) -> dispatch::DispatchResult {
@@ -743,6 +745,8 @@ decl_module! {
                 cu,
                 nu,
                 ipu,
+                unique_name,
+                domain_name,
                 foundation_account,
                 certified_sales_account,
             };

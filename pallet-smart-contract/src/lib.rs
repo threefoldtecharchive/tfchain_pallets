@@ -256,8 +256,10 @@ impl<T: Config> Module<T> {
 				// remove the contract by hash from storage
 				ContractIDByNodeIDAndHash::remove(node_contract.node_id, &node_contract.deployment_hash);
 			},
-			_ => (),
-		}
+			types::ContractData::NameContract(name_contract) => {
+				ContractIDByNameRegistration::remove(name_contract.name);
+			}
+		};
 
 		Self::_update_contract_state(&mut contract, &types::ContractState::Deleted)?;
 
@@ -394,8 +396,10 @@ impl<T: Config> Module<T> {
 			types::ContractData::NodeContract(_) => {
 				Self::_bill_node_contract(&mut contract)?
 			},
-			_ => ()
-		}
+			types::ContractData::NameContract(_) => {
+				Self::_bill_name_contract(&mut contract)?
+			}
+		};
 
 		// Reinsert contract to be billed for the next frequency
 		Self::_reinsert_contract_to_bill(contract.contract_id)?;
@@ -415,7 +419,7 @@ impl<T: Config> Module<T> {
 		let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(farm.pricing_policy_id);
 		
 		// bill user for 1 hour ip usage (60 blocks * 60 seconds)
-		let total_ip_cost = node_contract.public_ips * pricing_policy.ipu.value * (BILLING_FREQUENCY_IN_BLOCKS as u32 * 60);
+		let total_ip_cost = node_contract.public_ips * pricing_policy.ipu.value;
 		
 		let mut contract_billing_info = ContractBillingInformationByID::get(contract.contract_id);
 		let total_cost = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
@@ -467,6 +471,50 @@ impl<T: Config> Module<T> {
 		// set the amount unbilled back to 0
 		contract_billing_info.amount_unbilled = 0;
 		ContractBillingInformationByID::insert(contract.contract_id, &contract_billing_info);
+
+		Ok(())
+	}
+
+	fn _bill_name_contract(contract: &mut types::Contract) -> DispatchResult {
+		// TODO: CHANGE THIS!!!!
+		// we cannot now which pricing policy to fetch because a name contract is not linked to a node/farm
+		let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(1);
+		
+		let total_name_cost = pricing_policy.unique_name.value;
+
+		// get the contract's twin free balance
+		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+		let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
+		debug::info!("free balance: {:?}", balance);
+
+		// Calculate the amount due and discount received based on the total_cost amount due
+		// let (mut amount_due, discount_received) = Self::_calculate_discount(total_name_cost, balance, farm.certification_type);
+		// Convert amount due to u128
+		let mut amount_due_as_u128: u128 = total_name_cost.saturated_into::<u128>();
+		let balance_as_u128: u128 = balance.saturated_into::<u128>();
+
+		// if the total amount due exceeds the twin's balance, decomission contract
+		// but first drain the account with the amount equal to the balance of that twin
+		let mut decomission = false;
+		if amount_due_as_u128 >= balance_as_u128 {
+			amount_due_as_u128 = balance_as_u128;
+			decomission = true;				
+		}
+
+		let contract_bill = types::ContractBill {
+			contract_id: contract.contract_id,
+			timestamp: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
+			// TODO: maybe change this
+			discount_level: types::DiscountLevel::None,
+			amount_billed: amount_due_as_u128
+		};
+		Self::deposit_event(RawEvent::ContractBilled(contract_bill));
+
+		// If total balance exceeds the twin's balance, we can decomission contract
+		if decomission {
+			Self::_update_contract_state(contract, &types::ContractState::OutOfFunds)?;
+			return Ok(())
+		}
 
 		Ok(())
 	}
@@ -691,23 +739,13 @@ impl<T: Config> Module<T> {
 				_ => return Err(DispatchError::from(Error::<T>::NameNotValid))
 			}
 		}
-
-		let mut id = ContractID::get();
-		id = id+1;
-
 		let name_contract = types::NameContract {
 			name: name.clone()
 		};
 
-		let contract = types::Contract {
-			version: CONTRACT_VERSION,
-			twin_id,
-			contract_id: id,
-			state: types::ContractState::Created,
-			contract_type: types::ContractData::NameContract(name_contract)
-		};
+		let contract = Self::_create_contract(twin_id, types::ContractData::NameContract(name_contract))?;
 
-		ContractIDByNameRegistration::insert(name, &id);
+		ContractIDByNameRegistration::insert(name, &contract.contract_id);
 
 		Self::deposit_event(RawEvent::NameRegistered(contract));
 
@@ -721,10 +759,10 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	fn get_name_contract(contract: &types::Contract) -> Result<types::NameContract, DispatchError> {
-		match contract.contract_type.clone() {
-			types::ContractData::NameContract(c) => Ok(c),
-			_ => return Err(DispatchError::from(Error::<T>::InvalidContractType)),
-		}
-	}
+	// fn get_name_contract(contract: &types::Contract) -> Result<types::NameContract, DispatchError> {
+	// 	match contract.contract_type.clone() {
+	// 		types::ContractData::NameContract(c) => Ok(c),
+	// 		_ => return Err(DispatchError::from(Error::<T>::InvalidContractType)),
+	// 	}
+	// }
 }
