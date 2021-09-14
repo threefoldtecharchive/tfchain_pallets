@@ -263,7 +263,7 @@ fn test_node_contract_billing() {
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
 		assert_eq!(contract_billing_info.last_updated, 1628082000);
 
-		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(61);
+		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
 		assert_eq!(contract_to_bill, [1]);
 		
 		let gigabyte = 1000*1000*1000;
@@ -289,7 +289,7 @@ fn test_node_contract_billing() {
 
 		// let mature 10 blocks
 		// because we bill every 10 blocks
-		run_to_block(62);
+		run_to_block(602);
 
 		// Test that the expected events were emitted
 		let our_events = System::events()
@@ -347,12 +347,12 @@ fn test_name_contract_billing() {
 		let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
 		assert_eq!(contract_billing_info.last_updated, 1628082000);
 
-		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(61);
+		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
 		assert_eq!(contract_to_bill, [1]);
 
 		// let mature 60 blocks
 		// because we bill every 60 blocks
-		run_to_block(62);
+		run_to_block(602);
 
 		// Test that the expected events were emitted
 		let our_events = System::events()

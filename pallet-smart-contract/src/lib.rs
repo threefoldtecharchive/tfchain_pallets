@@ -31,7 +31,8 @@ pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Con
 
 pub const CONTRACT_VERSION: u32 = 1;
 // Frequency of contract billing in number of blocks
-pub const BILLING_FREQUENCY_IN_BLOCKS: u64 = 60;
+// 600 = every 1 hour
+pub const BILLING_FREQUENCY_IN_BLOCKS: u64 = 600;
 
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
