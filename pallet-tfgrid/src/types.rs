@@ -144,6 +144,19 @@ pub enum Unit {
     Terrabytes
 }
 
+impl Unit {
+    pub fn from_u32(number: u32) -> Unit {
+        match number {
+            1 => Unit::Bytes,
+            2 => Unit::Kilobytes,
+            3 => Unit::Megabytes,
+            4 => Unit::Gigabytes,
+            5 => Unit::Terrabytes,
+            _ => Unit::default()
+        }
+    }
+}
+
 impl Default for Unit {
     fn default() -> Unit {
         Unit::Gigabytes

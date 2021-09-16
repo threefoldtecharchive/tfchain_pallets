@@ -7,7 +7,7 @@ use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
 };
 use sp_runtime::{traits::SaturatedConversion};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
 use hex::FromHex;
 use codec::Encode;
 use sp_std::prelude::*;
@@ -63,34 +63,99 @@ decl_storage! {
         FarmingPolicyID: u32;
     }
 
-    // add_extra_genesis {
-    //     config(su_price): types::Policy;
-    //     config(nu_price): types::Policy;
-    //     config(ipu_price): types::Policy;
-    //     config(cu_price): types::Policy;
-    //     config(foundation_account): T::AccountId;
-    //     config(sales_account): T::AccountId;
+    add_extra_genesis {
+        config(su_price_value): u32;
+        config(su_price_unit): u32;
+        config(nu_price_value): u32;
+        config(nu_price_unit): u32;
+        config(ipu_price_value): u32;
+        config(ipu_price_unit): u32;
+        config(cu_price_value): u32;
+        config(cu_price_unit): u32;
+        config(unique_name_price_value): u32;
+        config(domain_name_price_value): u32;
+        config(foundation_account): T::AccountId;
+        config(sales_account): T::AccountId;
 
-    //     build(|_config| {
-    //         let foundation_account = _config.foundation_account.clone();
-    //         let sales_account = _config.sales_account.clone();
-    //         let su_price = _config.su_price.clone();
-    //         let cu_price = _config.cu_price.clone();
-    //         let nu_price = _config.nu_price.clone();
-    //         let ipu_price = _config.ipu_price.clone();
+        config(farming_policy_diy_cu): u32;
+        config(farming_policy_diy_nu): u32;
+        config(farming_policy_diy_su): u32;
+        config(farming_policy_diy_ipu): u32;
 
-    //         let _ = <Module<T>>::create_pricing_policy(
-    //             RawOrigin::Root.into(),
-    //             "threefold_default_pricing_policy".as_bytes().to_vec(),
-    //             su_price,
-    //             cu_price,
-    //             nu_price,
-    //             ipu_price,
-    //             foundation_account,
-    //             sales_account
-    //         );
-    //     });
-    // }
+        config(farming_policy_certified_cu): u32;
+        config(farming_policy_certified_nu): u32;
+        config(farming_policy_certified_su): u32;
+        config(farming_policy_certified_ipu): u32;
+
+        build(|_config| {
+            let foundation_account = _config.foundation_account.clone();
+            let sales_account = _config.sales_account.clone();
+
+            let su_price = types::Policy{
+                value: _config.su_price_value,
+                unit: types::Unit::from_u32(_config.su_price_unit),
+            };
+
+            let cu_price = types::Policy{
+                value: _config.cu_price_value,
+                unit: types::Unit::from_u32(_config.cu_price_unit),
+            };
+
+            let nu_price = types::Policy{
+                value: _config.nu_price_value,
+                unit: types::Unit::from_u32(_config.nu_price_unit),
+            };
+
+            let ipu_price = types::Policy{
+                value: _config.ipu_price_value,
+                unit: types::Unit::from_u32(_config.ipu_price_unit),
+            };
+
+            let unique_name_price = types::Policy{
+                value: _config.unique_name_price_value,
+                unit: types::Unit::default(),
+            };
+
+            let domain_name_price = types::Policy{
+                value: _config.domain_name_price_value,
+                unit: types::Unit::default(),
+            };
+
+            let _ = <Module<T>>::create_pricing_policy(
+                RawOrigin::Root.into(),
+                "threefold_default_pricing_policy".as_bytes().to_vec(),
+                su_price,
+                cu_price,
+                nu_price,
+                ipu_price,
+                unique_name_price,
+                domain_name_price,
+                foundation_account,
+                sales_account
+            );
+
+            let _ = <Module<T>>::create_farming_policy(
+                RawOrigin::Root.into(),
+                "threefold_default_diy_farming_policy".as_bytes().to_vec(),
+                _config.farming_policy_diy_su,
+                _config.farming_policy_diy_cu,
+                _config.farming_policy_diy_nu,
+                _config.farming_policy_diy_ipu,
+                types::CertificationType::Diy,
+            );
+
+            let _ = <Module<T>>::create_farming_policy(
+                RawOrigin::Root.into(),
+                "threefold_default_certified_farming_policy".as_bytes().to_vec(),
+                _config.farming_policy_certified_su,
+                _config.farming_policy_certified_cu,
+                _config.farming_policy_certified_nu,
+                _config.farming_policy_certified_ipu,
+                types::CertificationType::Certified,
+            );
+
+        });
+    }
 
 }
 
