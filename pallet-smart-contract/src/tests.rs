@@ -17,6 +17,29 @@ fn test_create_contract_works() {
 	});
 }
 
+
+#[test]
+fn test_create_node_contract_with_public_ips_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 1));
+		
+		let node_contract = SmartContractModule::contracts(1);
+
+		match node_contract.contract_type.clone() {
+			types::ContractData::NodeContract(c) => {
+				let farm = TfgridModule::farms(1);
+				assert_eq!(farm.public_ips[0].contract_id, 1);
+
+				assert_eq!(c.public_ips, 1);
+				assert_eq!(c.public_ips_list[0].ip, "1.1.1.0".as_bytes().to_vec());
+			},
+			_ => (),
+		}
+	});
+}
+
 #[test]
 fn test_create_contract_with_undefined_node_fails() {
 	new_test_ext().execute_with(|| {
@@ -159,6 +182,23 @@ fn test_cancel_contract_works() {
 
 		let contracts = SmartContractModule::node_contracts(1, types::ContractState::Created);
 		assert_eq!(contracts.len(), 0);
+	});
+}
+
+#[test]
+fn test_cancel_contract_works_public_ips_frees_ip() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(alice()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 1));
+
+		let farm = TfgridModule::farms(1);
+		assert_eq!(farm.public_ips[0].contract_id, 1);
+
+		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
+
+		let farm = TfgridModule::farms(1);
+		assert_eq!(farm.public_ips[0].contract_id, 0);
 	});
 }
 

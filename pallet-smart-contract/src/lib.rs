@@ -161,7 +161,7 @@ impl<T: Config> Module<T> {
 		
 		let twin_id = pallet_tfgrid::TwinIdByAccountID::<T>::get(&account_id);
 
-		let mut node_contract = types::NodeContract {
+		let node_contract = types::NodeContract {
 			node_id,
 			deployment_data,
 			deployment_hash: deployment_hash.clone(),
@@ -170,8 +170,6 @@ impl<T: Config> Module<T> {
 		};
 
 		let contract = Self::_create_contract(twin_id, types::ContractData::NodeContract(node_contract.clone()))?;
-		
-		Self::_reserve_ip(contract.contract_id, &mut node_contract)?;
 
 		ContractIDByNodeIDAndHash::insert(node_id, deployment_hash, id);
 		
@@ -184,9 +182,13 @@ impl<T: Config> Module<T> {
         Ok(())
 	}
 
-	fn _create_contract(twin_id: u32, contract_type: types::ContractData) -> Result<types::Contract, DispatchError> {
+	fn _create_contract(twin_id: u32, mut contract_type: types::ContractData) -> Result<types::Contract, DispatchError> {
 		let mut id = ContractID::get();
 		id = id+1;
+
+		if let types::ContractData::NodeContract(ref mut nc) = contract_type {
+			Self::_reserve_ip(id, nc)?;
+		};
 
 		let contract = types::Contract {
 			version: CONTRACT_VERSION,
