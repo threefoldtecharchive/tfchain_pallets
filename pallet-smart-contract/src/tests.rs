@@ -421,6 +421,26 @@ fn test_name_contract_billing() {
 	});
 }
 
+#[test]
+fn test_node_contract_reinsertion() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+		run_to_block(1);
+
+		Timestamp::set_timestamp(1628082000 * 1000);
+
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(bob()), 1, "some_data".as_bytes().to_vec(), "hash".as_bytes().to_vec(), 0));
+		assert_ok!(SmartContractModule::create_node_contract(Origin::signed(bob()), 1, "some_data_t".as_bytes().to_vec(), "some_hash".as_bytes().to_vec(), 0));
+
+		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
+		assert_eq!(contract_to_bill, [1, 2]);
+
+		run_to_block(1201);
+		let contract_to_bill = SmartContractModule::contract_to_bill_at_block(1201);
+		assert_eq!(contract_to_bill, [1, 2]);
+	});
+}
+
 fn prepare_farm_and_node() {
 	let ip = "10.2.3.3";
 	TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()).unwrap();

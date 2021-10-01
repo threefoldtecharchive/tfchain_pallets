@@ -136,6 +136,9 @@ decl_module! {
 					debug::info!("types::NodeContract billed failed at block: {:?} with err {:?}", block, err);
 				}
 			}
+			// clean storage map for billed contracts at block
+			let current_block_u64: u64 = block.saturated_into::<u64>();
+			ContractsToBillAt::remove(current_block_u64);
 		}
 	}
 }
@@ -206,7 +209,7 @@ impl<T: Config> Module<T> {
 
 		// Start billing frequency loop
 		// Will always be block now + frequency
-		Self::_reinsert_contract_to_bill(contract.contract_id)?;
+		Self::_reinsert_contract_to_bill(contract.contract_id);
 
         Contracts::insert(id, &contract);
         ContractID::put(id);
@@ -373,10 +376,6 @@ impl<T: Config> Module<T> {
 		let contracts = ContractsToBillAt::get(current_block_u64);
 
 		debug::info!("Contracts to check at block: {:?}, {:?}", block, contracts);
-		if contracts.len() == 0 {
-			return Ok(())
-		}
-
 		for contract_id in contracts {
 			let contract = Contracts::get(contract_id);
 			if contract.state != types::ContractState::Created {
@@ -393,7 +392,9 @@ impl<T: Config> Module<T> {
 	// We calculate total IP cost for the amount between the last billed time and now and add this to the amount due
 	// If the user runs out of balance, we decomission the contract and therefor will be removed, ips will be freed as well
 	fn _bill_contract(mut contract: types::Contract) -> DispatchResult {
-		// TODO , EITHER BILL NODE_CONTRACT OR NAME_CONTRACT
+		// Reinsert contract to be billed for the next frequency
+		Self::_reinsert_contract_to_bill(contract.contract_id);
+
 		match contract.contract_type {
 			types::ContractData::NodeContract(_) => {
 				Self::_bill_node_contract(&mut contract)?
@@ -402,9 +403,6 @@ impl<T: Config> Module<T> {
 				Self::_bill_name_contract(&mut contract)?
 			}
 		};
-
-		// Reinsert contract to be billed for the next frequency
-		Self::_reinsert_contract_to_bill(contract.contract_id)?;
 
 		Ok(())
 	}
@@ -428,7 +426,7 @@ impl<T: Config> Module<T> {
 
 		// If cost is 0, reinsert to be billed at next interval
 		if total_cost == 0 {
-			Self::_reinsert_contract_to_bill(contract.contract_id)?;
+			// Self::_reinsert_contract_to_bill(contract.contract_id)?;
 			return Ok(())
 		}
 
@@ -611,7 +609,7 @@ impl<T: Config> Module<T> {
 	}
 
 	// Reinserts a contract by id at the next interval we need to bill the contract
-	pub fn _reinsert_contract_to_bill(contract_id: u64) -> DispatchResult {
+	pub fn _reinsert_contract_to_bill(contract_id: u64) {
 		let now = <frame_system::Module<T>>::block_number().saturated_into::<u64>();
 		// Save the contract to be billed in now + BILLING_FREQUENCY_IN_BLOCKS
 		let future_block = now + BILLING_FREQUENCY_IN_BLOCKS;
@@ -619,7 +617,6 @@ impl<T: Config> Module<T> {
 		contracts.push(contract_id);
 		ContractsToBillAt::insert(future_block, &contracts);
 		debug::info!("Insert contracts: {:?}, to be billed at block {:?}", contracts, future_block);
-		Ok(())
 	}
 
 	// Helper function that updates the contract state and manages storage accordingly
