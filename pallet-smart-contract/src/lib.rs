@@ -9,8 +9,10 @@ use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult};
 use substrate_fixed::types::U64F64;
 
+use fixed::types::U16F16;
 use pallet_tfgrid;
 use pallet_tfgrid::types as pallet_tfgrid_types;
+use pallet_tft_price;
 use pallet_timestamp as timestamp;
 
 #[cfg(test)]
@@ -496,20 +498,25 @@ impl<T: Config> Module<T> {
 
         // get the contract's twin free balance
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-        let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
+        let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
         debug::info!("free balance: {:?}", balance);
 
         // Calculate the amount due and discount received based on the total_cost amount due
-        let (mut amount_due, discount_received) =
+        let (amount_due, discount_received) =
             Self::_calculate_discount(total_cost, balance, farm.certification_type);
         // Convert amount due to u128
         let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+        let tft_price: u128 = U16F16::to_num(pallet_tft_price::AverageTftPrice::get());
+        let amount_due_tft_as_u128 = amount_due_as_u128 / tft_price;
 
         // if the total amount due exceeds the twin's balance, decomission contract
         // but first drain the account with the amount equal to the balance of that twin
+        let mut amount_due_tft: BalanceOf<T> =
+            BalanceOf::<T>::saturated_from(amount_due_tft_as_u128);
+
         let mut decomission = false;
-        if amount_due >= balance {
-            amount_due = balance;
+        if amount_due_tft >= balance {
+            amount_due_tft = balance;
             decomission = true;
         }
 
@@ -526,7 +533,7 @@ impl<T: Config> Module<T> {
             contract_id: contract.contract_id,
             timestamp: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
             discount_level: discount_received.clone(),
-            amount_billed: amount_due_as_u128,
+            amount_billed: amount_due_tft_as_u128,
         };
         Self::deposit_event(RawEvent::ContractBilled(contract_bill));
 
@@ -561,14 +568,17 @@ impl<T: Config> Module<T> {
         // Calculate the amount due and discount received based on the total_cost amount due
         // let (mut amount_due, discount_received) = Self::_calculate_discount(total_name_cost, balance, farm.certification_type);
         // Convert amount due to u128
-        let mut amount_due_as_u128: u128 = total_name_cost.saturated_into::<u128>();
+        let amount_due_as_u128: u128 = total_name_cost.saturated_into::<u128>();
+        let tft_price: u128 = U16F16::to_num(pallet_tft_price::AverageTftPrice::get());
+        let mut amount_due_tft_as_128 = amount_due_as_u128 / tft_price;
+
         let balance_as_u128: u128 = balance.saturated_into::<u128>();
 
         // if the total amount due exceeds the twin's balance, decomission contract
         // but first drain the account with the amount equal to the balance of that twin
         let mut decomission = false;
-        if amount_due_as_u128 >= balance_as_u128 {
-            amount_due_as_u128 = balance_as_u128;
+        if amount_due_tft_as_128 >= balance_as_u128 {
+            amount_due_tft_as_128 = balance_as_u128;
             decomission = true;
         }
 
@@ -577,7 +587,7 @@ impl<T: Config> Module<T> {
             timestamp: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
             // TODO: maybe change this
             discount_level: types::DiscountLevel::None,
-            amount_billed: amount_due_as_u128,
+            amount_billed: amount_due_tft_as_128,
         };
         Self::deposit_event(RawEvent::ContractBilled(contract_bill));
 
@@ -764,7 +774,6 @@ impl<T: Config> Module<T> {
             }
             _ => (),
         }
-
         contract.state = state.clone();
         // update Contracts storage as well
         Contracts::insert(&contract.contract_id.clone(), contract);
