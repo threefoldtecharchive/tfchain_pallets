@@ -1,17 +1,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::Encode;
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// https://substrate.dev/docs/en/knowledgebase/runtime/frame
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
 };
-use sp_runtime::{traits::SaturatedConversion};
-use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
+use frame_system::{self as system, ensure_root, ensure_signed, RawOrigin};
 use hex::FromHex;
-use codec::Encode;
-use sp_std::prelude::*;
 use pallet_timestamp as timestamp;
+use sp_runtime::traits::SaturatedConversion;
+use sp_std::prelude::*;
 
 #[cfg(test)]
 mod tests;
@@ -21,7 +21,7 @@ mod mock;
 
 pub mod types;
 
-pub trait Config: system::Config + timestamp::Config  {
+pub trait Config: system::Config + timestamp::Config {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
@@ -314,7 +314,7 @@ decl_module! {
             FarmIdByName::insert(name, stored_farm.id);
 
             Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
-            
+
             Ok(())
         }
 
@@ -329,7 +329,7 @@ decl_module! {
             let farm = Farms::get(farm_id);
 
             ensure!(farm.twin_id == twin_id, Error::<T>::CannotUpdateFarmWrongTwin);
-            
+
             ensure!(!FarmPayoutV2AddressByFarmID::contains_key(farm_id), Error::<T>::FarmPayoutAdressAlreadyRegistered);
             FarmPayoutV2AddressByFarmID::insert(&farm_id, &stellar_address);
 
@@ -422,7 +422,15 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
+        pub fn create_node(
+            origin, farm_id: u32,
+            resources: types::Resources,
+            location: types::Location,
+            country: Vec<u8>,
+            city: Vec<u8>,
+            public_config: Option<types::PublicConfig>,
+            interfaces: Vec<types::Interface>,
+        ) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
@@ -443,7 +451,7 @@ decl_module! {
             let farming_policies = FarmingPolicyIDsByCertificationType::get(farm.certification_type);
             let mut farming_policy_id = 0;
             if farming_policies.len() > 0 {
-                farming_policy_id = farming_policies[farming_policies.len() -1]; 
+                farming_policy_id = farming_policies[farming_policies.len() -1];
             }
 
             let created = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
@@ -461,6 +469,7 @@ decl_module! {
                 uptime: 0,
                 created,
                 farming_policy_id,
+                interfaces,
             };
 
             Nodes::insert(id, &new_node);
@@ -473,18 +482,26 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
+        pub fn update_node(origin,
+            node_id: u32,
+            farm_id: u32,
+            resources: types::Resources,
+            location: types::Location,
+            country: Vec<u8>,
+            city: Vec<u8>,
+            public_config: Option<types::PublicConfig>,
+            interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
             ensure!(TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
-            
+
             let twin_id = TwinIdByAccountID::<T>::get(&account_id);
             let node = Nodes::get(&node_id);
             ensure!(node.twin_id == twin_id, Error::<T>::NodeUpdateNotAuthorized);
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
-            
+
             let mut stored_node = Nodes::get(node_id);
 
             stored_node.farm_id = farm_id;
@@ -493,6 +510,7 @@ decl_module! {
             stored_node.country = country;
             stored_node.city = city;
             stored_node.public_config = public_config;
+            stored_node.interfaces = interfaces;
 
             // override node in storage
             Nodes::insert(stored_node.id, &stored_node);
@@ -564,7 +582,7 @@ decl_module! {
 
             ensure!(sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519), Error::<T>::EntitySignatureDoesNotMatch);
 
-			let mut id = EntityID::get();
+            let mut id = EntityID::get();
             id = id+1;
 
             let entity = types::Entity::<T::AccountId> {
@@ -602,7 +620,7 @@ decl_module! {
 
             // remove entity by name id
             EntityIdByName::remove(&stored_entity.name);
-            
+
             stored_entity.name = name.clone();
             stored_entity.country = country;
             stored_entity.city = city;
@@ -654,29 +672,29 @@ decl_module! {
             let mut twin_id = TwinID::get();
             twin_id = twin_id+1;
 
-			let twin = types::Twin::<T::AccountId> {
+            let twin = types::Twin::<T::AccountId> {
                 version: TFGRID_VERSION,
-				id: twin_id,
-				account_id: account_id.clone(),
+                id: twin_id,
+                account_id: account_id.clone(),
                 entities: Vec::new(),
                 ip: ip.clone(),
-			};
+            };
 
             Twins::<T>::insert(&twin_id, &twin);
             TwinID::put(twin_id);
 
             // add the twin id to this users map of twin ids
-			TwinIdByAccountID::<T>::insert(&account_id.clone(), twin_id);
+            TwinIdByAccountID::<T>::insert(&account_id.clone(), twin_id);
 
-			Self::deposit_event(RawEvent::TwinStored(twin));
-			
-			Ok(())
+            Self::deposit_event(RawEvent::TwinStored(twin));
+
+            Ok(())
         }
-        
+
         #[weight = 10 + T::DbWeight::get().writes(1)]
-		pub fn update_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
+        pub fn update_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
-            
+
             ensure!(TwinIdByAccountID::<T>::contains_key(account_id.clone()), Error::<T>::TwinNotExists);
             let twin_id = TwinIdByAccountID::<T>::get(account_id.clone());
             let mut twin = Twins::<T>::get(&twin_id);
@@ -690,7 +708,7 @@ decl_module! {
 
             Self::deposit_event(RawEvent::TwinUpdated(twin));
             Ok(())
-		}
+        }
 
         // Method for twins only
         #[weight = 10 + T::DbWeight::get().writes(1)]
@@ -913,7 +931,7 @@ decl_module! {
                 certification_type,
             };
 
-            
+
             // We don't want to add duplicate farming_policies, so we check whether it exists, if so return error
             match farming_policies.binary_search(&new_policy) {
                 Ok(_) => Err(Error::<T>::FarmingPolicyAlreadyExists.into()),
