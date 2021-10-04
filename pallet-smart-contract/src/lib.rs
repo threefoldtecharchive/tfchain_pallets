@@ -426,7 +426,6 @@ impl<T: Config> Module<T> {
 
 		// If cost is 0, reinsert to be billed at next interval
 		if total_cost == 0 {
-			// Self::_reinsert_contract_to_bill(contract.contract_id)?;
 			return Ok(())
 		}
 
@@ -648,6 +647,7 @@ impl<T: Config> Module<T> {
 		}
 
 
+		contract.state = state.clone();
 		// update Contracts storage as well
 		Contracts::insert(&contract.contract_id.clone(), contract);
 		

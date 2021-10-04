@@ -186,6 +186,36 @@ fn test_cancel_contract_works() {
 }
 
 #[test]
+fn test_cancel_name_contract_works() {
+	new_test_ext().execute_with(|| {
+		prepare_farm_and_node();
+
+		assert_ok!(SmartContractModule::create_name_contract(Origin::signed(alice()), "some_name".as_bytes().to_vec()));
+
+		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
+
+		let name_contract = types::NameContract {
+			name: "some_name".as_bytes().to_vec(),
+		};
+		let contract_type = types::ContractData::NameContract(name_contract);
+
+		let expected_contract_value = types::Contract {
+			contract_id: 1,
+			state: types::ContractState::Deleted,
+			twin_id: 1,
+			version: 1,
+			contract_type
+		};
+
+		let name_contract = SmartContractModule::contracts(1);
+		assert_eq!(name_contract, expected_contract_value);
+
+		let contract_id = SmartContractModule::contract_id_by_name_registration("some_name".as_bytes().to_vec());
+		assert_eq!(contract_id, 0);
+	});
+}
+
+#[test]
 fn test_cancel_contract_works_public_ips_frees_ip() {
 	new_test_ext().execute_with(|| {
 		prepare_farm_and_node();
