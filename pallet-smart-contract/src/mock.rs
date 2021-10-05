@@ -31,6 +31,7 @@ construct_runtime!(
         TfgridModule: pallet_tfgrid::{Module, Call, Storage, Event<T>},
         Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
         SmartContractModule: pallet_smart_contract::{Module, Call, Event<T>},
+        TFTPriceModule: pallet_tft_price::{Module, Call, Storage, Event<T>},
     }
 );
 
@@ -81,6 +82,9 @@ impl pallet_tfgrid::Config for TestRuntime {
     type Currency = Balances;
 }
 
+impl pallet_tft_price::Config for TestRuntime {
+    type Event = Event;
+}
 impl pallet_timestamp::Config for TestRuntime {
     type Moment = Moment;
     type OnTimestampSet = ();
