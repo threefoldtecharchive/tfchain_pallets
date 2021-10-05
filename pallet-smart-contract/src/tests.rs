@@ -455,7 +455,7 @@ fn test_node_contract_billing() {
         assert_ok!(SmartContractModule::create_node_contract(
             Origin::signed(bob()),
             1,
-            "some_data".bill().to_vec(),
+            "some_data".as_bytes().to_vec(),
             "hash".as_bytes().to_vec(),
             1
         ));
