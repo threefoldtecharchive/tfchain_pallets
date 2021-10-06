@@ -31,6 +31,7 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		TfgridModule: tfgridModule::{Module, Call, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
@@ -41,6 +42,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
+	pub const ExistentialDeposit: u64 = 1;
 }
 
 impl frame_system::Config for TestRuntime {
@@ -61,7 +63,7 @@ impl frame_system::Config for TestRuntime {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -70,6 +72,17 @@ impl frame_system::Config for TestRuntime {
 
 impl Config for TestRuntime {
 	type Event = Event;
+	type Currency = Balances;
+}
+
+impl pallet_balances::Config for TestRuntime {
+	type MaxLocks = ();
+	type Balance = u64;
+	type Event = Event;
+	type DustRemoval = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<TestRuntime>;
 }
 
 impl pallet_timestamp::Config for TestRuntime {
@@ -92,6 +105,18 @@ impl ExternalityBuilder {
 	}
 }
 type AccountPublic = <MultiSignature as Verify>::Signer;
+
+pub fn new_test_ext() -> sp_io::TestExternalities {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<TestRuntime>().unwrap();
+	let genesis = pallet_balances::GenesisConfig::<TestRuntime> {
+		balances: vec![
+			(alice(), 1000000000000),
+            (bob(), 190000),
+		],
+	};
+	genesis.assimilate_storage(&mut t).unwrap();
+	t.into()
+}
 
 // industry dismiss casual gym gap music pave gasp sick owner dumb cost
 /// Helper function to generate a crypto pair from seed

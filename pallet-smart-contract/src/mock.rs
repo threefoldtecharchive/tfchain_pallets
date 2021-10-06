@@ -80,6 +80,7 @@ impl pallet_balances::Config for TestRuntime {
 
 impl pallet_tfgrid::Config for TestRuntime {
 	type Event = Event;
+	type Currency = Balances;
 }
 
 impl pallet_timestamp::Config for TestRuntime {
