@@ -431,7 +431,7 @@ impl<T: Config> Module<T> {
 
 		// get the contract's twin free balance
 		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-		let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
+		let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
 		debug::info!("free balance: {:?}", balance);
 
 		// Calculate the amount due and discount received based on the total_cost amount due
@@ -483,7 +483,7 @@ impl<T: Config> Module<T> {
 
 		// get the contract's twin free balance
 		let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-		let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
+		let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
 		debug::info!("free balance: {:?}", balance);
 
 		// Calculate the amount due and discount received based on the total_cost amount due
@@ -548,13 +548,13 @@ impl<T: Config> Module<T> {
 		// Tranfer to foundation account
 		let foundation_share_balance = BalanceOf::<T>::saturated_from(foundation_share.ceil().to_num::<u128>());
 		debug::info!("Transfering: {:?} from contract twin {:?} to foundation account {:?}", &foundation_share_balance, &twin.account_id, &pricing_policy.foundation_account);
-		T::Currency::transfer(&twin.account_id, &pricing_policy.foundation_account, foundation_share_balance, KeepAlive)
+		<T as Config>::Currency::transfer(&twin.account_id, &pricing_policy.foundation_account, foundation_share_balance, KeepAlive)
 			.map_err(|_| DispatchError::Other("Can't make foundation share transfer"))?;
 		
 		// Transfer to farmer account
 		let farmers_share_balance = BalanceOf::<T>::saturated_from(farmer_share.ceil().to_num::<u128>());
 		debug::info!("Transfering: {:?} from contract twin {:?} to foundation account {:?}", &farmers_share_balance, &twin.account_id, &farmer_twin.account_id);
-		T::Currency::transfer(&twin.account_id, &farmer_twin.account_id, farmers_share_balance, KeepAlive)
+		<T as Config>::Currency::transfer(&twin.account_id, &farmer_twin.account_id, farmers_share_balance, KeepAlive)
 		.map_err(|_| DispatchError::Other("Can't make farmer share transfer"))?;
 		
 
@@ -563,7 +563,7 @@ impl<T: Config> Module<T> {
 		if certified_sales_share > 0 {
 			let sales_share_balance = BalanceOf::<T>::saturated_from(certified_sales_share_u128);
 			debug::info!("Transfering: {:?} from contract twin {:?} to foundation account {:?}", &sales_share_balance, &twin.account_id, &pricing_policy.certified_sales_account);
-			T::Currency::transfer(&twin.account_id, &pricing_policy.certified_sales_account, sales_share_balance, KeepAlive)
+			<T as Config>::Currency::transfer(&twin.account_id, &pricing_policy.certified_sales_account, sales_share_balance, KeepAlive)
 				.map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
 		}
 			

@@ -4,7 +4,8 @@
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// https://substrate.dev/docs/en/knowledgebase/runtime/frame
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get,
+    decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get, debug,
+    traits::{Currency, ExistenceRequirement::KeepAlive},
 };
 use sp_runtime::{traits::SaturatedConversion};
 use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
@@ -21,8 +22,12 @@ mod mock;
 
 pub mod types;
 
+pub type BalanceOf<T> =
+    <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
+
 pub trait Config: system::Config + timestamp::Config  {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+    type Currency: Currency<Self::AccountId>;
 }
 
 // Version constant that referenced the struct version
@@ -232,7 +237,8 @@ decl_error! {
 
         CertificationCodeExists,
         FarmingPolicyAlreadyExists,
-        FarmPayoutAdressAlreadyRegistered
+        FarmPayoutAdressAlreadyRegistered,
+        FarmerDoesNotHaveEnoughFunds,
     }
 }
 
@@ -499,6 +505,9 @@ decl_module! {
 
             Self::deposit_event(RawEvent::NodeUpdated(stored_node));
 
+            // refund node wallet if needed
+            Self::fund_node_wallet(node_id);
+
             Ok(())
         }
 
@@ -521,6 +530,9 @@ decl_module! {
             let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 
             Self::deposit_event(RawEvent::NodeUptimeReported(node_id, now, uptime));
+
+            // refund node wallet if needed
+            Self::fund_node_wallet(node_id);
 
             Ok(())
         }
@@ -946,5 +958,38 @@ impl<T: Config> Module<T> {
         let ed25519_pubkey = sp_core::ed25519::Public::from_raw(bytes);
 
         return ed25519_pubkey;
+    }
+
+    pub fn fund_node_wallet(node_id: u32) {
+        if !Nodes::contains_key(&node_id) {
+            return
+        }
+        
+        let node = Nodes::get(node_id);
+        if !Farms::contains_key(node.farm_id) {
+            return
+        }
+        let farm = Farms::get(node.farm_id);
+
+        let node_twin = Twins::<T>::get(node.twin_id);
+        let farm_twin = Twins::<T>::get(farm.twin_id);
+        
+        let node_twin_balance: BalanceOf<T> = T::Currency::free_balance(&node_twin.account_id);
+        let minimal_balance = BalanceOf::<T>::saturated_from(200000 as u128);
+
+        if node_twin_balance <= minimal_balance {
+            let farmer_twin_balance: BalanceOf<T> = T::Currency::free_balance(&farm_twin.account_id);
+            let balance_to_transfer = BalanceOf::<T>::saturated_from(10000000 as u128);
+
+            if farmer_twin_balance <= balance_to_transfer {
+				debug::info!("farmer does not have enough balance to transfer");
+                return
+            }
+
+            debug::info!("Transfering: {:?} from farmer twin {:?} to node twin {:?}", &balance_to_transfer, &farm_twin.account_id, &node_twin.account_id);
+            if let Err(_) = T::Currency::transfer(&farm_twin.account_id, &node_twin.account_id, balance_to_transfer, KeepAlive) {
+                debug::error!("Can't make transfer from farmer twin to node twin");
+            };            
+        }
     }
 }
