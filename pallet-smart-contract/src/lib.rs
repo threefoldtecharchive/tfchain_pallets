@@ -71,7 +71,8 @@ decl_error! {
         ContractIsNotUnique,
         NameExists,
         NameNotValid,
-        InvalidContractType
+        InvalidContractType,
+        TFTPriceValueError
     }
 }
 
@@ -489,13 +490,19 @@ impl<T: Config> Module<T> {
         let total_ip_cost = node_contract.public_ips * pricing_policy.ipu.value;
 
         let mut contract_billing_info = ContractBillingInformationByID::get(contract.contract_id);
-        let total_cost = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
+        let mut total_cost = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
 
         // If cost is 0, reinsert to be billed at next interval
         if total_cost == 0 {
             return Ok(());
         }
-
+        // total cost in USD
+        total_cost = total_cost / 1_000_000;
+        let tft_price: u64 = U16F16::to_num(pallet_tft_price::AverageTftPrice::get());
+        if tft_price <= 0 {
+            return Err(DispatchError::from(Error::<T>::TFTPriceValueError));
+        }
+        let total_cost_tft = total_cost / tft_price;
         // get the contract's twin free balance
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
         let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
@@ -503,20 +510,18 @@ impl<T: Config> Module<T> {
 
         // Calculate the amount due and discount received based on the total_cost amount due
         let (amount_due, discount_received) =
-            Self::_calculate_discount(total_cost, balance, farm.certification_type);
+            Self::_calculate_discount(total_cost_tft, balance, farm.certification_type);
         // Convert amount due to u128
         let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
-        let tft_price: u128 = U16F16::to_num(pallet_tft_price::AverageTftPrice::get());
-        let amount_due_tft_as_u128 = amount_due_as_u128 / tft_price;
+        // Get current TFT price
 
         // if the total amount due exceeds the twin's balance, decomission contract
         // but first drain the account with the amount equal to the balance of that twin
-        let mut amount_due_tft: BalanceOf<T> =
-            BalanceOf::<T>::saturated_from(amount_due_tft_as_u128);
+        let mut amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(amount_due_as_u128);
 
         let mut decomission = false;
-        if amount_due_tft >= balance {
-            amount_due_tft = balance;
+        if amount_due >= balance {
+            amount_due = balance;
             decomission = true;
         }
 
@@ -533,7 +538,7 @@ impl<T: Config> Module<T> {
             contract_id: contract.contract_id,
             timestamp: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
             discount_level: discount_received.clone(),
-            amount_billed: amount_due_tft_as_u128,
+            amount_billed: amount_due_as_u128,
         };
         Self::deposit_event(RawEvent::ContractBilled(contract_bill));
 
@@ -569,7 +574,9 @@ impl<T: Config> Module<T> {
         // let (mut amount_due, discount_received) = Self::_calculate_discount(total_name_cost, balance, farm.certification_type);
         // Convert amount due to u128
         let amount_due_as_u128: u128 = total_name_cost.saturated_into::<u128>();
+        //Get TFT price
         let tft_price: u128 = U16F16::to_num(pallet_tft_price::AverageTftPrice::get());
+        //Convert amount due to TFT
         let mut amount_due_tft_as_128 = amount_due_as_u128 / tft_price;
 
         let balance_as_u128: u128 = balance.saturated_into::<u128>();

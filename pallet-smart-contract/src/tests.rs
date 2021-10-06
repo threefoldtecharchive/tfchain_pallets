@@ -1,4 +1,5 @@
 use crate::{mock::*, Error, RawEvent};
+use fixed::types::U16F16;
 use frame_support::{
     assert_noop, assert_ok,
     traits::{OnFinalize, OnInitialize},
@@ -8,7 +9,6 @@ use sp_runtime::traits::SaturatedConversion;
 
 use super::types;
 use pallet_tfgrid::types as pallet_tfgrid_types;
-use pallet_tft_price;
 
 #[test]
 fn test_create_contract_works() {
@@ -450,6 +450,7 @@ fn test_node_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
         run_to_block(1);
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1);
         Timestamp::set_timestamp(1628082000 * 1000);
 
         assert_ok!(SmartContractModule::create_node_contract(
@@ -488,17 +489,19 @@ fn test_node_contract_billing() {
         ));
 
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-        assert_eq!(contract_billing_info.amount_unbilled, 360002);
+        assert_eq!(contract_billing_info.amount_unbilled, 18001);
 
         // let mature 10 blocks
         // because we bill every 10 blocks
         run_to_block(602);
-
         // Test that the expected events were emitted
         let our_events = System::events()
             .into_iter()
             .map(|r| r.event)
             .filter_map(|e| {
+                print!("******************************");
+                print!("event{:?}", e);
+                print!("*****************");
                 if let Event::pallet_smart_contract(inner) = e {
                     Some(inner)
                 } else {
@@ -511,7 +514,7 @@ fn test_node_contract_billing() {
             contract_id: 1,
             timestamp: 1628082000,
             discount_level: types::DiscountLevel::Bronze,
-            amount_billed: 322002,
+            amount_billed: 18001,
         };
         let expected_events = vec![RawEvent::ContractBilled(contract_bill_event)];
 
@@ -639,7 +642,7 @@ fn prepare_farm_and_node() {
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
     let cu_policy = pallet_tfgrid_types::Policy {
-        value: 3000,
+        value: 30000,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
     let ipu_policy = pallet_tfgrid_types::Policy {
