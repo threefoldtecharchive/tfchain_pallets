@@ -1,5 +1,5 @@
-use codec::{Decode, Encode};
 use frame_support::traits::Vec;
+use codec::{Decode, Encode};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Encode, Decode, Default)]
 pub struct Entity<AccountId> {
@@ -21,7 +21,7 @@ pub struct Twin<AccountId> {
     pub account_id: AccountId,
     pub ip: Vec<u8>,
     //link to person's or companies who own this twin
-    pub entities: Vec<EntityProof>,
+    pub entities: Vec<EntityProof>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -32,16 +32,7 @@ pub struct Farm {
     pub twin_id: u32,
     pub pricing_policy_id: u32,
     pub certification_type: CertificationType,
-    pub public_ips: Vec<PublicIP>,
-}
-
-pub type IP = Vec<u8>;
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct Interface {
-    pub name: Vec<u8>,
-    pub mac: Vec<u8>,
-    pub ips: Vec<IP>,
+    pub public_ips: Vec<PublicIP>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -59,7 +50,6 @@ pub struct Node {
     pub uptime: u64,
     pub created: u64,
     pub farming_policy_id: u32,
-    pub interfaces: Vec<Interface>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -75,7 +65,7 @@ pub struct PublicConfig {
     pub ipv6: Vec<u8>,
     pub gw4: Vec<u8>,
     pub gw6: Vec<u8>,
-    pub domain: Vec<u8>,
+    pub domain: Vec<u8>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
@@ -89,6 +79,7 @@ pub struct Gateway<AccountId> {
     pub pub_key: Vec<u8>,
     pub account_id: AccountId,
 }
+
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct EntityProof {
@@ -129,7 +120,7 @@ pub struct PricingPolicy<AccountId> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Policy {
     pub value: u32,
-    pub unit: Unit,
+    pub unit: Unit
 }
 
 impl Policy {
@@ -150,7 +141,7 @@ pub enum Unit {
     Kilobytes,
     Megabytes,
     Gigabytes,
-    Terrabytes,
+    Terrabytes
 }
 
 impl Unit {
@@ -161,7 +152,7 @@ impl Unit {
             3 => Unit::Megabytes,
             4 => Unit::Gigabytes,
             5 => Unit::Terrabytes,
-            _ => Unit::default(),
+            _ => Unit::default()
         }
     }
 }
@@ -215,5 +206,5 @@ pub struct FarmingPolicy {
     pub nu: u32,
     pub ipv4: u32,
     pub timestamp: u64,
-    pub certification_type: CertificationType,
+    pub certification_type: CertificationType
 }
