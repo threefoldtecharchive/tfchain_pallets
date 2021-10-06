@@ -987,8 +987,9 @@ impl<T: Config> Module<T> {
             }
 
             debug::info!("Transfering: {:?} from farmer twin {:?} to node twin {:?}", &balance_to_transfer, &farm_twin.account_id, &node_twin.account_id);
-            T::Currency::transfer(&farm_twin.account_id, &node_twin.account_id, balance_to_transfer, KeepAlive)
-                .map_err(|_| debug::error!("Can't make transfer from farmer twin to node twin")).unwrap();
+            if let Err(_) = T::Currency::transfer(&farm_twin.account_id, &node_twin.account_id, balance_to_transfer, KeepAlive) {
+                debug::error!("Can't make transfer from farmer twin to node twin");
+            };            
         }
     }
 }
