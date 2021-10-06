@@ -351,7 +351,7 @@ fn create_node_with_same_pubkey_fails() {
 		let city = "Ghent".as_bytes().to_vec();
 
 		assert_noop!(
-			TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None),
+			TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None, Vec::new()),
 			Error::<TestRuntime>::NodeWithTwinIdExists
 		);
 	});
@@ -468,7 +468,7 @@ fn create_node() {
 		mru: 1,
 	};
 
-	assert_ok!(TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None));
+	assert_ok!(TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None, Vec::new()));
 }
 
 fn create_node_bob() {
@@ -488,5 +488,5 @@ fn create_node_bob() {
 		mru: 1,
 	};
 
-	assert_ok!(TfgridModule::create_node(Origin::signed(bob()), 1, resources, location, country, city, None));
+	assert_ok!(TfgridModule::create_node(Origin::signed(bob()), 1, resources, location, country, city, None, Vec::new()));
 }
