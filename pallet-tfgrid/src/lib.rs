@@ -522,10 +522,6 @@ decl_module! {
             let node_id = NodeIdByTwinID::get(twin_id);
 
             ensure!(Nodes::contains_key(node_id), Error::<T>::NodeNotExists);
-            let mut stored_node = Nodes::get(node_id);
-
-            stored_node.uptime = uptime;
-            Nodes::insert(node_id, stored_node);
 
             let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 
