@@ -153,6 +153,14 @@ pub fn bob() -> AccountId {
     get_account_id_from_seed::<sr25519::Public>("Bob")
 }
 
+pub fn ferdie() -> AccountId {
+    get_account_id_from_seed::<sr25519::Public>("Ferdie")
+}
+
+pub fn eve() -> AccountId {
+    get_account_id_from_seed::<sr25519::Public>("Eve")
+}
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<TestRuntime>()

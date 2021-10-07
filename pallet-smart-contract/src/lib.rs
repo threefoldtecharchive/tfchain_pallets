@@ -12,7 +12,7 @@ use pallet_tfgrid;
 use pallet_tfgrid::types as pallet_tfgrid_types;
 use pallet_tft_price;
 use pallet_timestamp as timestamp;
-use substrate_fixed::types::{U16F16, U64F64};
+use fixed::types::{U16F16, U64F64};
 
 #[cfg(test)]
 mod mock;
@@ -646,6 +646,7 @@ impl<T: Config> Module<T> {
         // Tranfer to foundation account
         let foundation_share_balance =
             BalanceOf::<T>::saturated_from(foundation_share.ceil().to_num::<u128>());
+        println!("foundation share {}", foundation_share.ceil().to_num::<u128>());
         debug::info!(
             "Transfering: {:?} from contract twin {:?} to foundation account {:?}",
             &foundation_share_balance,
