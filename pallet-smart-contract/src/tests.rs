@@ -1,11 +1,11 @@
 use crate::{mock::*, Error, RawEvent};
-use fixed::types::U16F16;
 use frame_support::{
     assert_noop, assert_ok,
     traits::{OnFinalize, OnInitialize},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::SaturatedConversion;
+use substrate_fixed::types::U16F16;
 
 use super::types;
 use pallet_tfgrid::types as pallet_tfgrid_types;
@@ -450,9 +450,16 @@ fn test_node_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
         run_to_block(1);
-        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1);
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1).unwrap();
         Timestamp::set_timestamp(1628082000 * 1000);
+        run_to_block(101);
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
 
+        run_to_block(202);
+        let twinn = TfgridModule::twins(1);
+        let bb = Balances::free_balance(&twinn.account_id);
+        let balancess_as_u128: u128 = bb.saturated_into::<u128>();
+        println!("Balance is {}", balancess_as_u128);
         assert_ok!(SmartContractModule::create_node_contract(
             Origin::signed(bob()),
             1,
@@ -463,8 +470,7 @@ fn test_node_contract_billing() {
 
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
         assert_eq!(contract_billing_info.last_updated, 1628082000);
-
-        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
+        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(802);
         assert_eq!(contract_to_bill, [1]);
 
         let gigabyte = 1000 * 1000 * 1000;
@@ -489,19 +495,16 @@ fn test_node_contract_billing() {
         ));
 
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-        assert_eq!(contract_billing_info.amount_unbilled, 18001);
+        assert_eq!(contract_billing_info.amount_unbilled, 180001); //this amount in unit USD = 1/1e7
 
         // let mature 10 blocks
         // because we bill every 10 blocks
-        run_to_block(602);
+        run_to_block(803);
         // Test that the expected events were emitted
         let our_events = System::events()
             .into_iter()
             .map(|r| r.event)
             .filter_map(|e| {
-                print!("******************************");
-                print!("event{:?}", e);
-                print!("*****************");
                 if let Event::pallet_smart_contract(inner) = e {
                     Some(inner)
                 } else {
@@ -513,8 +516,8 @@ fn test_node_contract_billing() {
         let contract_bill_event = types::ContractBill {
             contract_id: 1,
             timestamp: 1628082000,
-            discount_level: types::DiscountLevel::Bronze,
-            amount_billed: 18001,
+            discount_level: types::DiscountLevel::None,
+            amount_billed: 4599739, //amount here is (the above amount + 50000 for ip usage) divided by tft value almost 0.05 - discount
         };
         let expected_events = vec![RawEvent::ContractBilled(contract_bill_event)];
 
@@ -524,13 +527,13 @@ fn test_node_contract_billing() {
         let twin = TfgridModule::twins(1);
         let b = Balances::free_balance(&twin.account_id);
         let balances_as_u128: u128 = b.saturated_into::<u128>();
-        assert_eq!(balances_as_u128, 1000000225402);
+        assert_eq!(balances_as_u128, 1000004599739);
 
         // check the contract owners address to see if it got balance credited
         let twin = TfgridModule::twins(2);
         let b = Balances::free_balance(&twin.account_id);
         let balances_as_u128: u128 = b.saturated_into::<u128>();
-        assert_eq!(balances_as_u128, 2499774598);
+        assert_eq!(balances_as_u128, 2495400261);
 
         // amount unbilled should have been reset after a transfer between contract owner and farmer
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
@@ -634,27 +637,27 @@ fn prepare_farm_and_node() {
     });
 
     let su_policy = pallet_tfgrid_types::Policy {
-        value: 15000,
+        value: 150000,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
     let nu_policy = pallet_tfgrid_types::Policy {
-        value: 100,
-        unit: pallet_tfgrid_types::Unit::Gigabytes,
-    };
-    let cu_policy = pallet_tfgrid_types::Policy {
-        value: 30000,
-        unit: pallet_tfgrid_types::Unit::Gigabytes,
-    };
-    let ipu_policy = pallet_tfgrid_types::Policy {
-        value: 5000,
-        unit: pallet_tfgrid_types::Unit::Gigabytes,
-    };
-    let unique_name_policy = pallet_tfgrid_types::Policy {
         value: 1000,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
+    let cu_policy = pallet_tfgrid_types::Policy {
+        value: 300000,
+        unit: pallet_tfgrid_types::Unit::Gigabytes,
+    };
+    let ipu_policy = pallet_tfgrid_types::Policy {
+        value: 50000,
+        unit: pallet_tfgrid_types::Unit::Gigabytes,
+    };
+    let unique_name_policy = pallet_tfgrid_types::Policy {
+        value: 10000,
+        unit: pallet_tfgrid_types::Unit::Gigabytes,
+    };
     let domain_name_policy = pallet_tfgrid_types::Policy {
-        value: 2000,
+        value: 20000,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
 

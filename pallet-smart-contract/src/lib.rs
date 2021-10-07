@@ -7,13 +7,12 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult};
-use substrate_fixed::types::U64F64;
 
-use fixed::types::U16F16;
 use pallet_tfgrid;
 use pallet_tfgrid::types as pallet_tfgrid_types;
 use pallet_tft_price;
 use pallet_timestamp as timestamp;
+use substrate_fixed::types::{U16F16, U64F64};
 
 #[cfg(test)]
 mod mock;
@@ -127,7 +126,6 @@ decl_module! {
         }
 
         fn on_finalize(block: T::BlockNumber) {
-            debug::info!("Entering on finalize: {:?}", block);
             match Self::_bill_contracts_at_block(block) {
                 Ok(_) => {
                     debug::info!("types::NodeContract billed successfully at block: {:?}", block);
@@ -490,29 +488,40 @@ impl<T: Config> Module<T> {
         let total_ip_cost = node_contract.public_ips * pricing_policy.ipu.value;
 
         let mut contract_billing_info = ContractBillingInformationByID::get(contract.contract_id);
-        let mut total_cost = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
+        let mut total_costt = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
 
         // If cost is 0, reinsert to be billed at next interval
-        if total_cost == 0 {
+        if total_costt == 0 {
+            // Self::_reinsert_contract_to_bill(contract.contract_id)?;
             return Ok(());
         }
         // total cost in USD
-        total_cost = total_cost / 1_000_000;
-        let tft_price: u64 = U16F16::to_num(pallet_tft_price::AverageTftPrice::get());
-        if tft_price <= 0 {
+        let total_cost = U64F64::from_num(total_costt);
+        println!("total cost {}", total_cost);
+        // let tft_price = pallet_tft_price::AverageTftPrice::get();
+        let tft_price = U64F64::from_num(pallet_tft_price::AverageTftPrice::get());
+        println!("tft price {}", tft_price);
+        if tft_price <= U64F64::from_num(0) {
+            debug::info!("TFT price is zero");
+            println!("TFT price is zero");
             return Err(DispatchError::from(Error::<T>::TFTPriceValueError));
         }
-        let total_cost_tft = total_cost / tft_price;
-        // get the contract's twin free balance
+        let total_cost_tft_fixed32 = total_cost / tft_price;
+        println!("total_cost_tft_fixed {}", total_cost_tft_fixed32);
+        let total_cost_tft = U64F64::to_num(total_cost_tft_fixed32);
+        println!("total_cost_tft {}", total_cost_tft);
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
         let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
+        println!("free balance: {:?}", balance);
         debug::info!("free balance: {:?}", balance);
 
         // Calculate the amount due and discount received based on the total_cost amount due
         let (amount_due, discount_received) =
             Self::_calculate_discount(total_cost_tft, balance, farm.certification_type);
+        println!("amount due {:?}", amount_due);
         // Convert amount due to u128
         let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+        println!("amount due 128 {:?}", amount_due_as_u128);
         // Get current TFT price
 
         // if the total amount due exceeds the twin's balance, decomission contract
