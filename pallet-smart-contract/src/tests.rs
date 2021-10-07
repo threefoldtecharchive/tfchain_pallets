@@ -1,11 +1,11 @@
 use crate::{mock::*, Error, RawEvent};
+use fixed::types::{U16F16, U64F64};
 use frame_support::{
     assert_noop, assert_ok,
     traits::{OnFinalize, OnInitialize},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::SaturatedConversion;
-use fixed::types::{U16F16, U64F64};
 
 use super::types;
 use pallet_tfgrid::types as pallet_tfgrid_types;
@@ -449,17 +449,11 @@ fn test_name_registration_fails_with_invalid_dns_name() {
 fn test_node_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
-        run_to_block(1);
         TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1).unwrap();
+        run_to_block(1);
         Timestamp::set_timestamp(1628082000 * 1000);
-        run_to_block(101);
         TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
 
-        run_to_block(202);
-        let twinn = TfgridModule::twins(1);
-        let bb = Balances::free_balance(&twinn.account_id);
-        let balancess_as_u128: u128 = bb.saturated_into::<u128>();
-        println!("Balance is {}", balancess_as_u128);
         assert_ok!(SmartContractModule::create_node_contract(
             Origin::signed(bob()),
             1,
@@ -470,7 +464,7 @@ fn test_node_contract_billing() {
 
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
         assert_eq!(contract_billing_info.last_updated, 1628082000);
-        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(802);
+        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
         assert_eq!(contract_to_bill, [1]);
 
         let gigabyte = 1000 * 1000 * 1000;
@@ -499,7 +493,7 @@ fn test_node_contract_billing() {
 
         // let mature 10 blocks
         // because we bill every 10 blocks
-        run_to_block(803);
+        run_to_block(602);
         // Test that the expected events were emitted
         let our_events = System::events()
             .into_iter()
@@ -530,7 +524,6 @@ fn test_node_contract_billing() {
         // farmer gets 70% of cultivation rewards if he deploys on his own node
         let amount = U64F64::from_num(4599739) * U64F64::from_num(0.7);
         let amount_added_to_farmer_balance = amount.ceil().to_num::<u128>();
-        println!("amount added to farmer balance {}", amount_added_to_farmer_balance);
         let farmer_balance_should_be = 1000000000000 + amount_added_to_farmer_balance;
         assert_eq!(balances_as_u128, farmer_balance_should_be);
 
@@ -541,8 +534,7 @@ fn test_node_contract_billing() {
 
         // TODO figure out why there is 1 unit in diffrence here!!
         let twin2_balance_should_be = 2500000000 - 4599740 as u128;
-        
-        
+
         assert_eq!(balances_as_u128, twin2_balance_should_be);
 
         // amount unbilled should have been reset after a transfer between contract owner and farmer
@@ -555,8 +547,8 @@ fn test_node_contract_billing() {
 fn test_name_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
         run_to_block(1);
-
         Timestamp::set_timestamp(1628082000 * 1000);
 
         assert_ok!(SmartContractModule::create_name_contract(
@@ -591,7 +583,7 @@ fn test_name_contract_billing() {
             contract_id: 1,
             timestamp: 1628082000,
             discount_level: types::DiscountLevel::None,
-            amount_billed: 20000,
+            amount_billed: 199987,
         };
         let expected_events: std::vec::Vec<RawEvent<AccountId>> =
             vec![RawEvent::ContractBilled(contract_bill_event)];
