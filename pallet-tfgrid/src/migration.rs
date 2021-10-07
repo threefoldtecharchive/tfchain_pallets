@@ -1,32 +1,32 @@
 use super::*;
 use frame_support::weights::Weight;
-use codec::{Decode, Encode};
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
-pub struct OldNode {
-    pub version: u32,
-    pub id: u32,
-    pub farm_id: u32,
-    pub twin_id: u32,
-    pub resources: super::types::Resources,
-    pub location: super::types::Location,
-    pub country: Vec<u8>,
-    pub city: Vec<u8>,
-    // optional public config
-    pub public_config: Option<super::types::PublicConfig>,
-    pub uptime: u64,
-    pub created: u64,
-    pub farming_policy_id: u32,
-}
 
 pub mod deprecated {
+    use codec::{Decode, Encode};
     use crate::Config;
     use frame_support::{decl_module, decl_storage};
     use sp_std::prelude::*;
 
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+    pub struct OldNode {
+        pub version: u32,
+        pub id: u32,
+        pub farm_id: u32,
+        pub twin_id: u32,
+        pub resources: super::types::Resources,
+        pub location: super::types::Location,
+        pub country: Vec<u8>,
+        pub city: Vec<u8>,
+        // optional public config
+        pub public_config: Option<super::types::PublicConfig>,
+        pub uptime: u64,
+        pub created: u64,
+        pub farming_policy_id: u32,
+    }
+
     decl_storage! {
-        trait Store for Module<T: Config> as MyNicks {
-            pub Nodes get(fn nodes): map hasher(blake2_128_concat) u32 => super::OldNode;
+        trait Store for Module<T: Config> as MyNodes {
+            pub Nodes get(fn nodes): map hasher(blake2_128_concat) u32 => OldNode;
         }
     }
     decl_module! {
@@ -44,8 +44,8 @@ pub fn migrate_to_v2<T: Config>() -> frame_support::weights::Weight {
         frame_support::debug::info!(" >>> Updating Nodes storage. Migrating {} nodes...", count);
 
         // We transform the storage values from the old into the new format.
-        Nodes::translate::<(u32, super::types::Node), _>(
-            |k: u32, (_, node): (u32, super::types::Node)| {
+        Nodes::translate::<deprecated::OldNode, _>(
+            |k, node| {
                 frame_support::debug::info!("     Migrated node for {:?}...", k);
 
                 let new_node = super::types::Node {
