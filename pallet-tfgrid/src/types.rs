@@ -2,7 +2,7 @@ use frame_support::traits::Vec;
 use codec::{Decode, Encode};
 
 /// Utility type for managing upgrades/migrations.
-#[derive(Encode, Decode, Clone, frame_support::RuntimeDebug, PartialEq)]
+#[derive(Encode, Decode, Clone, Debug, PartialEq)]
 pub enum StorageVersion {
 	V1Struct,
 	V2Struct,

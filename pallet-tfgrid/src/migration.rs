@@ -32,6 +32,9 @@ pub mod deprecated {
 pub fn migrate_to_v2<T: Config>() -> frame_support::weights::Weight {
     frame_support::debug::RuntimeLogger::init();
 
+    let version = PalletVersion::get();
+    frame_support::debug::info!(" >>> Starting migration, pallet version: {:?}", version);
+
     // Storage migrations should use storage versions for safety.
     if PalletVersion::get() == super::types::StorageVersion::V1Struct {
         let count = Nodes::iter().count();

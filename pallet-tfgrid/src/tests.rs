@@ -367,6 +367,15 @@ fn create_farming_policy_works() {
 }
 
 #[test]
+fn create_farming_policy_certified_works() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "test".as_bytes().to_vec();
+
+		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Certified));
+	});
+}
+
+#[test]
 fn node_auto_attach_farming_policy() {
 	ExternalityBuilder::build().execute_with(|| {
 		create_entity();
