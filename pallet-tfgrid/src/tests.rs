@@ -320,9 +320,6 @@ fn node_report_uptime_works() {
 
 		Timestamp::set_timestamp(1628082000);
 		assert_ok!(TfgridModule::report_uptime(Origin::signed(alice()), 500));
-
-		let node = TfgridModule::nodes(1);
-		assert_eq!(node.uptime, 500);
 	});
 }
 

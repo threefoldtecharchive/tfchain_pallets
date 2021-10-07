@@ -473,7 +473,6 @@ decl_module! {
                 country,
                 city,
                 public_config,
-                uptime: 0,
                 created,
                 farming_policy_id,
                 interfaces,

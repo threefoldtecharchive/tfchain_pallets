@@ -54,7 +54,6 @@ pub struct Node {
     pub city: Vec<u8>,
     // optional public config
     pub public_config: Option<PublicConfig>,
-    pub uptime: u64,
     pub created: u64,
     pub farming_policy_id: u32,
     pub interfaces: Vec<Interface>,

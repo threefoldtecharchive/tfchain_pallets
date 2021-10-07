@@ -56,7 +56,6 @@ pub fn migrate_to_v2<T: Config>() -> frame_support::weights::Weight {
                     country: node.country,
                     city: node.city,
                     public_config: node.public_config,
-                    uptime: node.uptime,
                     created: node.created,
                     farming_policy_id: node.farming_policy_id,
                     interfaces: Vec::new()
