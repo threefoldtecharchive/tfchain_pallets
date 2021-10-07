@@ -4,7 +4,7 @@ use codec::{Decode, Encode};
 /// Utility type for managing upgrades/migrations.
 #[derive(Encode, Decode, Clone, frame_support::RuntimeDebug, PartialEq)]
 pub enum StorageVersion {
-	V1Bytes,
+	V1Struct,
 	V2Struct,
 }
 
