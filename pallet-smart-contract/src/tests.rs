@@ -707,6 +707,7 @@ fn prepare_farm_and_node() {
         country,
         city,
         None,
+        Vec::new(),
     )
     .unwrap();
 }
