@@ -499,7 +499,7 @@ impl<T: Config> Module<T> {
         let total_cost_tft = U64F64::from_num(total_cost) / tft_price;
         let total_cost_tft_64 = U64F64::to_num(total_cost_tft);
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
-        let balance: BalanceOf<T> = T::Currency::free_balance(&twin.account_id);
+        let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
 
         // Calculate the amount due and discount received based on the total_cost amount due
         let (amount_due, discount_received) =
