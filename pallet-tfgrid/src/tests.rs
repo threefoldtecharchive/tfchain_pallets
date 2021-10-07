@@ -320,9 +320,6 @@ fn node_report_uptime_works() {
 
 		Timestamp::set_timestamp(1628082000);
 		assert_ok!(TfgridModule::report_uptime(Origin::signed(alice()), 500));
-
-		let node = TfgridModule::nodes(1);
-		assert_eq!(node.uptime, 500);
 	});
 }
 
@@ -351,7 +348,7 @@ fn create_node_with_same_pubkey_fails() {
 		let city = "Ghent".as_bytes().to_vec();
 
 		assert_noop!(
-			TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None),
+			TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None, Vec::new()),
 			Error::<TestRuntime>::NodeWithTwinIdExists
 		);
 	});
@@ -363,6 +360,15 @@ fn create_farming_policy_works() {
 		let name = "test".as_bytes().to_vec();
 
 		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Diy));
+	});
+}
+
+#[test]
+fn create_farming_policy_certified_works() {
+	ExternalityBuilder::build().execute_with(|| {
+		let name = "test".as_bytes().to_vec();
+
+		assert_ok!(TfgridModule::create_farming_policy(RawOrigin::Root.into(), name, 12, 15, 10, 8, super::types::CertificationType::Certified));
 	});
 }
 
@@ -468,7 +474,7 @@ fn create_node() {
 		mru: 1,
 	};
 
-	assert_ok!(TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None));
+	assert_ok!(TfgridModule::create_node(Origin::signed(alice()), 1, resources, location, country, city, None, Vec::new()));
 }
 
 fn create_node_bob() {
@@ -488,5 +494,5 @@ fn create_node_bob() {
 		mru: 1,
 	};
 
-	assert_ok!(TfgridModule::create_node(Origin::signed(bob()), 1, resources, location, country, city, None));
+	assert_ok!(TfgridModule::create_node(Origin::signed(bob()), 1, resources, location, country, city, None, Vec::new()));
 }

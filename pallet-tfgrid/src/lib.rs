@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit="256"]
 
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
@@ -21,6 +22,7 @@ mod tests;
 mod mock;
 
 pub mod types;
+pub mod migration;
 
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
@@ -66,6 +68,9 @@ decl_storage! {
         PricingPolicyID: u32;
         CertificationCodeID: u32;
         FarmingPolicyID: u32;
+
+        /// The current version of the pallet.
+		PalletVersion: types::StorageVersion = types::StorageVersion::V1Struct;
     }
 
     add_extra_genesis {
@@ -248,6 +253,10 @@ decl_module! {
 
         fn deposit_event() = default;
 
+        fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			migration::migrate_to_v2::<T>()
+		}
+
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_farm(origin, name: Vec<u8>, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
@@ -428,7 +437,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
+        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
@@ -464,9 +473,9 @@ decl_module! {
                 country,
                 city,
                 public_config,
-                uptime: 0,
                 created,
                 farming_policy_id,
+                interfaces,
             };
 
             Nodes::insert(id, &new_node);
@@ -479,7 +488,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>) -> dispatch::DispatchResult {
+        pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
@@ -499,6 +508,7 @@ decl_module! {
             stored_node.country = country;
             stored_node.city = city;
             stored_node.public_config = public_config;
+            stored_node.interfaces = interfaces;
 
             // override node in storage
             Nodes::insert(stored_node.id, &stored_node);

@@ -1,6 +1,13 @@
 use frame_support::traits::Vec;
 use codec::{Decode, Encode};
 
+/// Utility type for managing upgrades/migrations.
+#[derive(Encode, Decode, Clone, Debug, PartialEq)]
+pub enum StorageVersion {
+	V1Struct,
+	V2Struct,
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Encode, Decode, Default)]
 pub struct Entity<AccountId> {
     pub version: u32,
@@ -47,9 +54,18 @@ pub struct Node {
     pub city: Vec<u8>,
     // optional public config
     pub public_config: Option<PublicConfig>,
-    pub uptime: u64,
     pub created: u64,
     pub farming_policy_id: u32,
+    pub interfaces: Vec<Interface>,
+}
+
+pub type IP = Vec<u8>;
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct Interface {
+    pub name: Vec<u8>,
+    pub mac: Vec<u8>,
+    pub ips: Vec<IP>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
