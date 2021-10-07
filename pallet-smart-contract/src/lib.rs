@@ -7,10 +7,11 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult};
-use substrate_fixed::types::U64F64;
 
+use fixed::types::U64F64;
 use pallet_tfgrid;
 use pallet_tfgrid::types as pallet_tfgrid_types;
+use pallet_tft_price;
 use pallet_timestamp as timestamp;
 
 #[cfg(test)]
@@ -69,7 +70,8 @@ decl_error! {
         ContractIsNotUnique,
         NameExists,
         NameNotValid,
-        InvalidContractType
+        InvalidContractType,
+        TFTPriceValueError
     }
 }
 
@@ -124,7 +126,6 @@ decl_module! {
         }
 
         fn on_finalize(block: T::BlockNumber) {
-            debug::info!("Entering on finalize: {:?}", block);
             match Self::_bill_contracts_at_block(block) {
                 Ok(_) => {
                     debug::info!("types::NodeContract billed successfully at block: {:?}", block);
@@ -229,7 +230,6 @@ impl<T: Config> Module<T> {
         Contracts::insert(id, &contract);
         ContractID::put(id);
         ContractBillingInformationByID::insert(id, contract_billing_information);
-
         Ok(contract)
     }
 
@@ -437,14 +437,12 @@ impl<T: Config> Module<T> {
     pub fn _bill_contracts_at_block(block: T::BlockNumber) -> DispatchResult {
         let current_block_u64: u64 = block.saturated_into::<u64>();
         let contracts = ContractsToBillAt::get(current_block_u64);
-
         debug::info!("Contracts to check at block: {:?}, {:?}", block, contracts);
         for contract_id in contracts {
             let contract = Contracts::get(contract_id);
             if contract.state != types::ContractState::Created {
                 continue;
             }
-
             Self::_bill_contract(contract)?;
         }
         Ok(())
@@ -457,7 +455,6 @@ impl<T: Config> Module<T> {
     fn _bill_contract(mut contract: types::Contract) -> DispatchResult {
         // Reinsert contract to be billed for the next frequency
         Self::_reinsert_contract_to_bill(contract.contract_id);
-
         match contract.contract_type {
             types::ContractData::NodeContract(_) => Self::_bill_node_contract(&mut contract)?,
             types::ContractData::NameContract(_) => Self::_bill_name_contract(&mut contract)?,
@@ -491,22 +488,30 @@ impl<T: Config> Module<T> {
 
         // If cost is 0, reinsert to be billed at next interval
         if total_cost == 0 {
+            // Self::_reinsert_contract_to_bill(contract.contract_id)?;
             return Ok(());
         }
-
-        // get the contract's twin free balance
+        let tft_price = U64F64::from_num(pallet_tft_price::AverageTftPrice::get());
+        if tft_price <= U64F64::from_num(0) {
+            debug::info!("TFT price is zero");
+            return Err(DispatchError::from(Error::<T>::TFTPriceValueError));
+        }
+        let total_cost_tft = U64F64::from_num(total_cost) / tft_price;
+        let total_cost_tft_64 = U64F64::to_num(total_cost_tft);
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
         let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
-        debug::info!("free balance: {:?}", balance);
 
         // Calculate the amount due and discount received based on the total_cost amount due
-        let (mut amount_due, discount_received) =
-            Self::_calculate_discount(total_cost, balance, farm.certification_type);
+        let (amount_due, discount_received) =
+            Self::_calculate_discount(total_cost_tft_64, balance, farm.certification_type);
         // Convert amount due to u128
         let amount_due_as_u128: u128 = amount_due.saturated_into::<u128>();
+        // Get current TFT price
 
         // if the total amount due exceeds the twin's balance, decomission contract
         // but first drain the account with the amount equal to the balance of that twin
+        let mut amount_due: BalanceOf<T> = BalanceOf::<T>::saturated_from(amount_due_as_u128);
+
         let mut decomission = false;
         if amount_due >= balance {
             amount_due = balance;
@@ -550,25 +555,27 @@ impl<T: Config> Module<T> {
         // TODO: CHANGE THIS!!!!
         // we cannot now which pricing policy to fetch because a name contract is not linked to a node/farm
         let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(1);
-
-        let total_name_cost = pricing_policy.unique_name.value;
-
+        let total_name_cost = U64F64::from_num(pricing_policy.unique_name.value);
         // get the contract's twin free balance
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
         let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
         debug::info!("free balance: {:?}", balance);
 
-        // Calculate the amount due and discount received based on the total_cost amount due
+        //Get TFT price
+        let tft_price = U64F64::from_num(pallet_tft_price::AverageTftPrice::get());
+        //Convert amount due to TFT
+        let amount_due_tft = total_name_cost / tft_price;
+        // // Calculate the amount due and discount received based on the total_cost amount due
         // let (mut amount_due, discount_received) = Self::_calculate_discount(total_name_cost, balance, farm.certification_type);
-        // Convert amount due to u128
-        let mut amount_due_as_u128: u128 = total_name_cost.saturated_into::<u128>();
+        // // Convert amount due to u128
+        let mut amount_due_tft_as_u128: u128 = U64F64::to_num(amount_due_tft);
         let balance_as_u128: u128 = balance.saturated_into::<u128>();
 
         // if the total amount due exceeds the twin's balance, decomission contract
         // but first drain the account with the amount equal to the balance of that twin
         let mut decomission = false;
-        if amount_due_as_u128 >= balance_as_u128 {
-            amount_due_as_u128 = balance_as_u128;
+        if amount_due_tft_as_u128 >= balance_as_u128 {
+            amount_due_tft_as_u128 = balance_as_u128;
             decomission = true;
         }
 
@@ -577,7 +584,7 @@ impl<T: Config> Module<T> {
             timestamp: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
             // TODO: maybe change this
             discount_level: types::DiscountLevel::None,
-            amount_billed: amount_due_as_u128,
+            amount_billed: amount_due_tft_as_u128,
         };
         Self::deposit_event(RawEvent::ContractBilled(contract_bill));
 
@@ -620,6 +627,10 @@ impl<T: Config> Module<T> {
         // Tranfer to foundation account
         let foundation_share_balance =
             BalanceOf::<T>::saturated_from(foundation_share.ceil().to_num::<u128>());
+        println!(
+            "foundation share {}",
+            foundation_share.ceil().to_num::<u128>()
+        );
         debug::info!(
             "Transfering: {:?} from contract twin {:?} to foundation account {:?}",
             &foundation_share_balance,
@@ -764,7 +775,6 @@ impl<T: Config> Module<T> {
             }
             _ => (),
         }
-
         contract.state = state.clone();
         // update Contracts storage as well
         Contracts::insert(&contract.contract_id.clone(), contract);
@@ -882,7 +892,6 @@ impl<T: Config> Module<T> {
             }
         }
         let name_contract = types::NameContract { name: name.clone() };
-
         let contract =
             Self::_create_contract(twin_id, types::ContractData::NameContract(name_contract))?;
 

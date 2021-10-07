@@ -7,8 +7,8 @@ use sp_core::{sr25519, Pair, Public, H256};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::MultiSignature;
 use sp_runtime::{
-    testing::Header,
-    traits::{BlakeTwo256, IdentityLookup},
+    testing::{Header, TestXt},
+	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup},
 };
 use sp_std::prelude::*;
 
@@ -17,6 +17,7 @@ pub type Signature = MultiSignature;
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 pub type Moment = u64;
 
+type Extrinsic = TestXt<Call, ()>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>;
 type Block = frame_system::mocking::MockBlock<TestRuntime>;
 
@@ -31,6 +32,7 @@ construct_runtime!(
         TfgridModule: pallet_tfgrid::{Module, Call, Storage, Event<T>},
         Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
         SmartContractModule: pallet_smart_contract::{Module, Call, Event<T>},
+        TFTPriceModule: pallet_tft_price::{Module, Call, Storage, Event<T>},
     }
 );
 
@@ -81,6 +83,12 @@ impl pallet_tfgrid::Config for TestRuntime {
     type Currency = Balances;
 }
 
+impl pallet_tft_price::Config for TestRuntime {
+    type Event = Event;
+	type AuthorityId = pallet_tft_price::crypto::AuthId;
+	type Call = Call;
+}
+
 impl pallet_timestamp::Config for TestRuntime {
     type Moment = Moment;
     type OnTimestampSet = ();
@@ -102,6 +110,33 @@ fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public
         .public()
 }
 
+impl frame_system::offchain::SigningTypes for TestRuntime {
+	type Public = <Signature as Verify>::Signer;
+	type Signature = Signature;
+}
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for TestRuntime
+where
+	Call: From<C>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
+
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for TestRuntime
+where
+	Call: From<LocalCall>,
+{
+	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+		call: Call,
+		_public: <Signature as Verify>::Signer,
+		_account: AccountId,
+		nonce: u64,
+	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+		Some((call, (nonce, ())))
+	}
+}
+
 /// Helper function to generate an account ID from seed
 fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
 where
@@ -116,6 +151,14 @@ pub fn alice() -> AccountId {
 
 pub fn bob() -> AccountId {
     get_account_id_from_seed::<sr25519::Public>("Bob")
+}
+
+pub fn ferdie() -> AccountId {
+    get_account_id_from_seed::<sr25519::Public>("Ferdie")
+}
+
+pub fn eve() -> AccountId {
+    get_account_id_from_seed::<sr25519::Public>("Eve")
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
