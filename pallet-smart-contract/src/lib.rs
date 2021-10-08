@@ -8,7 +8,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult};
 
-use fixed::types::U64F64;
+use substrate_fixed::types::U64F64;
 use pallet_tfgrid;
 use pallet_tfgrid::types as pallet_tfgrid_types;
 use pallet_tft_price;
@@ -627,10 +627,6 @@ impl<T: Config> Module<T> {
         // Tranfer to foundation account
         let foundation_share_balance =
             BalanceOf::<T>::saturated_from(foundation_share.ceil().to_num::<u128>());
-        println!(
-            "foundation share {}",
-            foundation_share.ceil().to_num::<u128>()
-        );
         debug::info!(
             "Transfering: {:?} from contract twin {:?} to foundation account {:?}",
             &foundation_share_balance,

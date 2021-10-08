@@ -20,7 +20,7 @@ version = '2.0.0'
 
 [dependencies]
 # Substrate packages
-serde = '1.0'
+serde = { version = '1.0.100', default-features = false, features = ['derive'] }
 pallet-balances = { version = '3.0', default-features = false }
 frame-support = { version = '3.0.0', default-features = false }
 frame-system = { version = '3.0.0', default-features = false }

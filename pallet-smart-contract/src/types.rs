@@ -1,6 +1,6 @@
 use frame_support::traits::Vec;
 use codec::{Decode, Encode};
-use fixed::types::{U64F64};
+use substrate_fixed::types::{U64F64};
 
 use pallet_tfgrid::types;
 

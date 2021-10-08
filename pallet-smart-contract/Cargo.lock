@@ -1110,8 +1110,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-storage",
- "substrate-fixed 0.5.6 (git+https://github.com/encointer/substrate-fixed.git?rev=b33d186888c60f38adafcfc0ec3a21aab263aef1)",
- "substrate-fixed 0.5.6 (git+https://github.com/encointer/substrate-fixed)",
+ "substrate-fixed",
 ]
 
 [[package]]
@@ -1136,20 +1135,20 @@ dependencies = [
 [[package]]
 name = "pallet-tft-price"
 version = "1.0.0"
-source = "git+https://github.com/threefoldtech/tfchain_tft.git#8a08b0513af7e7dc554785ff2cadfd3b1026d064"
 dependencies = [
  "frame-support",
  "frame-system",
- "lite-json",
- "pallet-balances",
- "pallet-timestamp",
  "parity-scale-codec",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
+ "sp-keystore",
  "sp-runtime",
  "sp-std",
- "sp-storage",
- "substrate-fixed 0.5.6 (git+https://github.com/encointer/substrate-fixed)",
+ "substrate-fixed",
 ]
 
 [[package]]
@@ -1853,6 +1852,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot",
  "schnorrkel",
+ "serde",
  "sp-core",
  "sp-externalities",
 ]
@@ -2074,15 +2074,6 @@ dependencies = [
 name = "substrate-fixed"
 version = "0.5.6"
 source = "git+https://github.com/encointer/substrate-fixed.git?rev=b33d186888c60f38adafcfc0ec3a21aab263aef1#b33d186888c60f38adafcfc0ec3a21aab263aef1"
-dependencies = [
- "parity-scale-codec",
- "typenum",
-]
-
-[[package]]
-name = "substrate-fixed"
-version = "0.5.6"
-source = "git+https://github.com/encointer/substrate-fixed#b33d186888c60f38adafcfc0ec3a21aab263aef1"
 dependencies = [
  "parity-scale-codec",
  "typenum",

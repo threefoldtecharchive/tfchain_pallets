@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, RawEvent};
-use fixed::types::{U16F16, U64F64};
+use substrate_fixed::types::{U16F16, U64F64};
 use frame_support::{
     assert_noop, assert_ok,
     traits::{OnFinalize, OnInitialize},
