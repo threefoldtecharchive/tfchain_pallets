@@ -1,8 +1,4 @@
-//! A pallet to demonstrate usage of a simple storage map
-//!
-//! Storage maps map a key type to a value type. The hasher used to hash the key can be customized.
-//! This pallet uses the `blake2_128_concat` hasher. This is a good default hasher.
-
+//! A pallet for Threefold key-value store
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // use frame_support::traits::Vec;
@@ -63,8 +59,8 @@ decl_module! {
         #[weight = 100]
         fn set(origin, key: Vec<u8>, value: Vec<u8>) -> DispatchResult {
             // A user can only set their own entry
-            ensure!(key.len()	<= 64, Error::<T>::KeyIsTooLarge);
-            ensure!(value.len() <= 64, Error::<T>::ValueIsTooLarge);
+            ensure!(key.len()	<= 512, Error::<T>::KeyIsTooLarge);
+            ensure!(value.len() <= 2048, Error::<T>::ValueIsTooLarge);
             let user = ensure_signed(origin)?;
             <TFKVStore<T>>::insert(&user, &key, &value);
             Self::deposit_event(RawEvent::EntrySet(user, key, value));

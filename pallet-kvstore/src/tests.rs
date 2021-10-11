@@ -1,4 +1,4 @@
-use crate::{self as tfkvstore, Config, Error, RawEvent};
+use crate::{self as pallet_kvstore, Config, Error, RawEvent};
 use frame_support::{assert_err, assert_ok, construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_io::TestExternalities;
@@ -17,7 +17,7 @@ construct_runtime!(
         UncheckedExtrinsic = UncheckedExtrinsic,
     {
         System: frame_system::{Module, Call, Config, Storage, Event<T>},
-        TFKVStoreModule: tfkvstore::{Module, Call, Storage, Event<T>},
+        TFKVStoreModule: pallet_kvstore::{Module, Call, Storage, Event<T>},
     }
 );
 
@@ -84,7 +84,7 @@ fn set() {
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec()
         ));
-        let expected_event = Event::tfkvstore(RawEvent::EntrySet(
+        let expected_event = Event::pallet_kvstore(RawEvent::EntrySet(
             1,
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec(),
@@ -104,7 +104,7 @@ fn get() {
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec()
         ));
-        let expected_event = Event::tfkvstore(RawEvent::EntrySet(
+        let expected_event = Event::pallet_kvstore(RawEvent::EntrySet(
             1,
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec(),
@@ -118,7 +118,7 @@ fn get() {
             Origin::signed(1),
             key.as_bytes().to_vec()
         ));
-        let expected_event = Event::tfkvstore(RawEvent::EntryGot(
+        let expected_event = Event::pallet_kvstore(RawEvent::EntryGot(
             1,
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec(),
@@ -138,7 +138,7 @@ fn delete() {
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec()
         ));
-        let expected_event = Event::tfkvstore(RawEvent::EntrySet(
+        let expected_event = Event::pallet_kvstore(RawEvent::EntrySet(
             1,
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec(),
@@ -150,7 +150,7 @@ fn delete() {
             Origin::signed(1),
             key.as_bytes().to_vec()
         ));
-        let expected_event = Event::tfkvstore(RawEvent::EntryTaken(
+        let expected_event = Event::pallet_kvstore(RawEvent::EntryTaken(
             1,
             key.as_bytes().to_vec(),
             value.as_bytes().to_vec(),
