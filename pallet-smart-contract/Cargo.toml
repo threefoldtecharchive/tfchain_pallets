@@ -20,7 +20,9 @@ version = '2.0.0'
 
 [dependencies.pallet-tfgrid]
 default-features = false
-path = "../pallet-tfgrid"
+git = "https://github.com/threefoldtech/tfchain_pallets"
+package = "pallet-tfgrid"
+branch = "development"
 
 [dependencies]
 # Substrate packages
