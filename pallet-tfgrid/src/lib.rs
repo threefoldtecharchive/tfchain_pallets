@@ -33,7 +33,6 @@ pub trait Config: system::Config + timestamp::Config  {
 }
 
 // Version constant that referenced the struct version
-// pub const TFGRID_VERSION: u32 = 1;
 pub const TFGRID_ENTITY_VERSION: u32 = 1;
 pub const TFGRID_FARM_VERSION: u32 = 1;
 pub const TFGRID_TWIN_VERSION: u32 = 1;
