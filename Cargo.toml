@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "pallet-tfgrid",
+    "pallet-smart-contract",
+    "pallet-vesting-validator",
+]
