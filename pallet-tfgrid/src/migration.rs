@@ -77,3 +77,42 @@ pub fn migrate_to_v2<T: Config>() -> frame_support::weights::Weight {
         0
     }
 }
+
+pub fn migrate_node_version_to_v2<T: Config>() -> frame_support::weights::Weight {
+    frame_support::debug::RuntimeLogger::init();
+
+    let version = PalletVersion::get();
+    frame_support::debug::info!(" >>> Starting migration, pallet version: {:?}", version);
+
+    // Storage migrations should use storage versions for safety.
+    if PalletVersion::get() == super::types::StorageVersion::V2Struct {
+        let count = Nodes::iter().count();
+        frame_support::debug::info!(" >>> Updating Nodes storage. Migrating {} nodes...", count);
+
+        let mut migrated_count = 0;
+        // We transform the storage values from the old into the new format.
+        Nodes::translate::<super::types::Node, _>(
+            |k, node| {
+                frame_support::debug::info!("     Migrated node for {:?}...", k);
+
+                let new_node = super::types::Node {
+                    version: super::TFGRID_NODE_VERSION,
+                    ..node
+                };
+
+                migrated_count+=1;
+                Some(new_node)
+            }
+        );
+
+        // Update storage version.
+        PalletVersion::put(super::types::StorageVersion::V2Struct);
+        frame_support::debug::info!(" <<< Pallet tfgrid storage updated! Migrated {} nodes ✅", migrated_count);
+
+        // Return the weight consumed by the migration.
+        T::DbWeight::get().reads_writes(migrated_count as Weight + 1, migrated_count as Weight + 1)
+    } else {
+        frame_support::debug::info!(" >>> Unused migration!");
+        0
+    }
+}

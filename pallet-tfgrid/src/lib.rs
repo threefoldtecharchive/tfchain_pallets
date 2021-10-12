@@ -33,7 +33,15 @@ pub trait Config: system::Config + timestamp::Config  {
 }
 
 // Version constant that referenced the struct version
-pub const TFGRID_VERSION: u32 = 1;
+// pub const TFGRID_VERSION: u32 = 1;
+pub const TFGRID_ENTITY_VERSION: u32 = 1;
+pub const TFGRID_FARM_VERSION: u32 = 1;
+pub const TFGRID_TWIN_VERSION: u32 = 1;
+pub const TFGRID_NODE_VERSION: u32 = 2;
+pub const TFGRID_PRICING_POLICY_VERSION: u32 = 1;
+pub const TFGRID_CERTIFICATION_CODE_VERSION: u32 = 1;
+pub const TFGRID_FARMING_POLICY_VERSION: u32 = 1;
+
 
 decl_storage! {
     trait Store for Module<T: Config> as TfgridModule {
@@ -254,7 +262,7 @@ decl_module! {
         fn deposit_event() = default;
 
         fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migration::migrate_to_v2::<T>()
+			migration::migrate_node_version_to_v2::<T>()
 		}
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
@@ -288,7 +296,7 @@ decl_module! {
             };
 
             let new_farm = types::Farm {
-                version: TFGRID_VERSION,
+                version: TFGRID_FARM_VERSION,
                 id,
                 twin_id,
                 name,
@@ -464,7 +472,7 @@ decl_module! {
             let created = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 
             let new_node = types::Node {
-                version: TFGRID_VERSION,
+                version: TFGRID_NODE_VERSION,
                 id,
                 farm_id,
                 twin_id,
@@ -586,7 +594,7 @@ decl_module! {
             id = id+1;
 
             let entity = types::Entity::<T::AccountId> {
-                version: TFGRID_VERSION,
+                version: TFGRID_ENTITY_VERSION,
                 id,
                 name: name.clone(),
                 country,
@@ -673,7 +681,7 @@ decl_module! {
             twin_id = twin_id+1;
 
 			let twin = types::Twin::<T::AccountId> {
-                version: TFGRID_VERSION,
+                version: TFGRID_TWIN_VERSION,
 				id: twin_id,
 				account_id: account_id.clone(),
                 entities: Vec::new(),
@@ -821,7 +829,7 @@ decl_module! {
 
 
             let new_policy = types::PricingPolicy {
-                version: TFGRID_VERSION,
+                version: TFGRID_PRICING_POLICY_VERSION,
                 id,
                 name,
                 su,
@@ -892,7 +900,7 @@ decl_module! {
             id = id+1;
 
             let certification_code = types::CertificationCodes{
-                version: TFGRID_VERSION,
+                version: TFGRID_CERTIFICATION_CODE_VERSION,
                 id,
                 name: name.clone(),
                 description,
@@ -920,7 +928,7 @@ decl_module! {
             let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 
             let new_policy = types::FarmingPolicy {
-                version: TFGRID_VERSION,
+                version: TFGRID_FARMING_POLICY_VERSION,
                 id,
                 name,
                 su,
