@@ -1206,7 +1206,7 @@ dependencies = [
 [[package]]
 name = "pallet-tft-price"
 version = "1.0.0"
-source = "git+https://github.com/threefoldtech/tfchain_tft.git#f7fdd1f5d21845ab92c61db2029fe75b0985ce5f"
+source = "git+https://github.com/threefoldtech/tfchain_tft.git?branch=main#f2b6800296397e3a781dcad02f7003a18691aaa5"
 dependencies = [
  "frame-support",
  "frame-system",
