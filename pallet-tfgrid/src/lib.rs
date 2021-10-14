@@ -22,7 +22,6 @@ mod tests;
 mod mock;
 
 pub mod types;
-pub mod migration;
 
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
@@ -259,10 +258,6 @@ decl_module! {
         type Error = Error<T>;
 
         fn deposit_event() = default;
-
-        fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migration::migrate_node_version_to_v2::<T>()
-		}
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_farm(origin, name: Vec<u8>, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
