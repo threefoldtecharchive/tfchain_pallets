@@ -563,6 +563,10 @@ impl<T: Config> Module<T> {
 
         //Get TFT price
         let tft_price = U64F64::from_num(pallet_tft_price::AverageTftPrice::get());
+        if tft_price <= U64F64::from_num(0) {
+            debug::info!("TFT price is zero");
+            return Err(DispatchError::from(Error::<T>::TFTPriceValueError));
+        }
         //Convert amount due to TFT
         let amount_due_tft = total_name_cost / tft_price;
         // // Calculate the amount due and discount received based on the total_cost amount due
