@@ -1161,6 +1161,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-burning"
+version = "3.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
+]
+
+[[package]]
 name = "pallet-smart-contract"
 version = "3.0.0"
 dependencies = [
