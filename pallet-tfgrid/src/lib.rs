@@ -245,7 +245,7 @@ decl_error! {
 
         PricingPolicyExists,
         PricingPolicyNotExists,
-
+        PricingPolicyWithDifferentIdExists,
         CertificationCodeExists,
         FarmingPolicyAlreadyExists,
         FarmPayoutAdressAlreadyRegistered,
@@ -841,7 +841,6 @@ decl_module! {
             PricingPolicyID::put(id);
 
             Self::deposit_event(RawEvent::PricingPolicyStored(new_policy));
-
             Ok(())
         }
 
@@ -854,13 +853,21 @@ decl_module! {
             cu: types::Policy,
             nu: types::Policy,
             ipu: types::Policy,
+            unique_name: types::Policy,
+            domain_name: types::Policy,
             foundation_account: T::AccountId,
             certified_sales_account: T::AccountId
         ) -> dispatch::DispatchResult {
             let _ = ensure_root(origin)?;
-
+            
+            // Ensure pricing policy with same id already exists
             ensure!(PricingPolicies::<T>::contains_key(&id), Error::<T>::PricingPolicyNotExists);
-            ensure!(!PricingPolicyIdByName::contains_key(&name), Error::<T>::PricingPolicyExists);
+
+            // if name exists ensure that it belongs to the same policy id
+            if PricingPolicyIdByName::contains_key(&name){
+                let stored_id = PricingPolicyIdByName::get(&name);
+                ensure!(stored_id==id, Error::<T>::PricingPolicyWithDifferentIdExists);
+            }
             let mut pricing_policy = PricingPolicies::<T>::get(id);
 
             if name != pricing_policy.name {
@@ -872,6 +879,8 @@ decl_module! {
             pricing_policy.cu = cu;
             pricing_policy.nu = nu;
             pricing_policy.ipu = ipu;
+            pricing_policy.unique_name = unique_name;
+            pricing_policy.domain_name = domain_name;
             pricing_policy.foundation_account = foundation_account;
             pricing_policy.certified_sales_account = certified_sales_account;
 

@@ -427,6 +427,134 @@ fn test_node_fund() {
 	});
 }
 
+#[test]
+fn test_create_and_update_policy(){
+	new_test_ext().execute_with(|| {
+	let su_policy = super::types::Policy {
+        value: 150000,
+        unit: super::types::Unit::Gigabytes,
+    };
+    let nu_policy = super::types::Policy {
+        value: 1000,
+        unit: super::types::Unit::Gigabytes,
+    };
+    let cu_policy = super::types::Policy {
+        value: 300000,
+        unit: super::types::Unit::Gigabytes,
+    };
+    let ipu_policy = super::types::Policy {
+        value: 50000,
+        unit: super::types::Unit::Gigabytes,
+    };
+    let unique_name_policy = super::types::Policy {
+        value: 10000,
+        unit: super::types::Unit::Gigabytes,
+    };
+    let domain_name_policy = super::types::Policy {
+        value: 20000,
+        unit: super::types::Unit::Gigabytes,
+    };
+	let name = String::from("policy_1").as_bytes().to_vec();
+    TfgridModule::create_pricing_policy(
+        RawOrigin::Root.into(),
+        name.clone(),
+        su_policy.clone(),
+        cu_policy.clone(),
+        nu_policy.clone(),
+        ipu_policy.clone(),
+        unique_name_policy.clone(),
+        domain_name_policy.clone(),
+        bob(),
+        bob(),
+    )
+    .unwrap();
+
+	// get policy id 
+	let policy_id = TfgridModule::pricing_policies_by_name_id(name.clone());
+	// Try updating policy with the same name
+	let updated_nu_policy = super::types::Policy {
+        value: 900,
+        unit: super::types::Unit::Gigabytes,
+    };
+	TfgridModule::update_pricing_policy(
+        RawOrigin::Root.into(),
+		policy_id.clone(),
+        name.clone(),
+        su_policy.clone(),
+        cu_policy.clone(),
+        updated_nu_policy.clone(),
+        ipu_policy.clone(),
+        unique_name_policy.clone(),
+        domain_name_policy.clone(),
+        bob(),
+        bob(),
+    )
+    .unwrap();
+	// Get policy and make sure it is updated
+	let policy = TfgridModule::pricing_policies(policy_id.clone());
+	assert_eq!(policy.name.clone(), name.clone(), "policy name didn't match");
+	assert_eq!(policy.id.clone(), policy_id.clone());
+	assert_eq!(policy.nu, updated_nu_policy);
+	
+
+	// test updating policy name
+	let new_name = String::from("policy_1_updated").as_bytes().to_vec();
+	let updated_su_policy = super::types::Policy {
+        value: 500,
+        unit: super::types::Unit::Gigabytes,
+    };
+	TfgridModule::update_pricing_policy(
+        RawOrigin::Root.into(),
+		policy_id.clone(),
+        new_name.clone(),
+        updated_su_policy.clone(),
+        cu_policy.clone(),
+        updated_nu_policy.clone(),
+        ipu_policy.clone(),
+        unique_name_policy.clone(),
+        domain_name_policy.clone(),
+        bob(),
+        bob(),
+    )
+    .unwrap();
+	let policy = TfgridModule::pricing_policies(policy_id.clone());
+	assert_eq!(policy.name.clone(), new_name.clone(), "policy name didn't match");
+	assert_eq!(policy.id.clone(), policy_id.clone());
+	assert_eq!(policy.su, updated_su_policy);
+
+	// Test updating the name that conflicts with existing policy
+	let policy2_name = String::from("policy_2").as_bytes().to_vec();
+	TfgridModule::create_pricing_policy(
+        RawOrigin::Root.into(),
+        policy2_name.clone(),
+        su_policy.clone(),
+        cu_policy.clone(),
+        nu_policy.clone(),
+        ipu_policy.clone(),
+        unique_name_policy.clone(),
+        domain_name_policy.clone(),
+        bob(),
+        bob(),
+    )
+    .unwrap();
+	let policy2_id = TfgridModule::pricing_policies_by_name_id(policy2_name.clone());
+	//update name to existing name should fail
+	assert_noop!(TfgridModule::update_pricing_policy(
+        RawOrigin::Root.into(),
+		policy2_id.clone(),
+        new_name.clone(),
+        updated_su_policy.clone(),
+        cu_policy.clone(),
+        updated_nu_policy.clone(),
+        ipu_policy.clone(),
+        unique_name_policy.clone(),
+        domain_name_policy.clone(),
+        bob(),
+        bob(),
+    ), Error::<TestRuntime>::PricingPolicyWithDifferentIdExists);
+
+});
+}
 fn create_entity() {
 	let name = "foobar".as_bytes().to_vec();
 	let country = "Belgium".as_bytes().to_vec();
