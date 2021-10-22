@@ -440,7 +440,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
+        pub fn create_node(origin, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
@@ -475,7 +475,7 @@ decl_module! {
                 location,
                 country,
                 city,
-                public_config,
+                public_config: None,
                 created,
                 farming_policy_id,
                 interfaces,
@@ -491,7 +491,7 @@ decl_module! {
         }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, public_config: Option<types::PublicConfig>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
+        pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
@@ -510,7 +510,6 @@ decl_module! {
             stored_node.location = location;
             stored_node.country = country;
             stored_node.city = city;
-            stored_node.public_config = public_config;
             stored_node.interfaces = interfaces;
 
             // override node in storage
