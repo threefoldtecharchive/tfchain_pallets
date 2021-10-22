@@ -188,6 +188,7 @@ decl_event!(
         NodeUpdated(types::Node),
         NodeDeleted(u32),
         NodeUptimeReported(u32, u64, u64),
+        NodePublicConfigStored(u32, types::PublicConfig),
 
         EntityStored(types::Entity<AccountId>),
         EntityUpdated(types::Entity<AccountId>),
@@ -538,6 +539,33 @@ decl_module! {
             let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
 
             Self::deposit_event(RawEvent::NodeUptimeReported(node_id, now, uptime));
+
+            // refund node wallet if needed
+            Self::fund_node_wallet(node_id);
+
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn add_node_public_config(origin, farm_id: u32, node_id: u32, public_config: types::PublicConfig) -> dispatch::DispatchResult {
+            let account_id = ensure_signed(origin)?;
+
+            // check if this twin can update the farm with id passed
+            ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
+            let farm = Farms::get(farm_id);
+            let farm_twin = Twins::<T>::get(farm.twin_id);
+            ensure!(farm_twin.account_id == account_id, Error::<T>::CannotUpdateFarmWrongTwin);
+
+            // check if the node belong to the farm
+            ensure!(Nodes::contains_key(node_id), Error::<T>::NodeNotExists);
+            let mut node = Nodes::get(node_id);
+            ensure!(node.farm_id == farm_id, Error::<T>::NodeUpdateNotAuthorized);
+
+            // update the public config and save
+            node.public_config = Some(public_config.clone());
+            Nodes::insert(node_id, node);
+
+            Self::deposit_event(RawEvent::NodePublicConfigStored(node_id, public_config));
 
             // refund node wallet if needed
             Self::fund_node_wallet(node_id);

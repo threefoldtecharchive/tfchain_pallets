@@ -324,6 +324,52 @@ fn node_report_uptime_works() {
 }
 
 #[test]
+fn node_add_public_config_works() {
+	ExternalityBuilder::build().execute_with(|| {
+		create_entity();
+		create_twin();
+		create_farm();
+		create_node();
+
+		let pub_config = super::types::PublicConfig {
+			ipv4: "some_ip".as_bytes().to_vec(),	
+			ipv6: "some_ip".as_bytes().to_vec(),	
+			gw4: "some_ip".as_bytes().to_vec(),	
+			gw6: "some_ip".as_bytes().to_vec(),	
+			domain: "some_domain".as_bytes().to_vec(),	
+		};
+
+		assert_ok!(TfgridModule::add_node_public_config(Origin::signed(alice()), 1, 1, pub_config.clone()));
+
+		let node = TfgridModule::nodes(1);
+		assert_eq!(node.public_config, Some(pub_config));
+	});
+}
+
+#[test]
+fn node_add_public_config_fails_if_signature_incorrect() {
+	ExternalityBuilder::build().execute_with(|| {
+		create_entity();
+		create_twin();
+		create_farm();
+		create_node();
+
+		let pub_config = super::types::PublicConfig {
+			ipv4: "some_ip".as_bytes().to_vec(),	
+			ipv6: "some_ip".as_bytes().to_vec(),	
+			gw4: "some_ip".as_bytes().to_vec(),	
+			gw6: "some_ip".as_bytes().to_vec(),	
+			domain: "some_domain".as_bytes().to_vec(),	
+		};
+
+		assert_noop!(
+			TfgridModule::add_node_public_config(Origin::signed(bob()), 1, 1, pub_config.clone()),
+			Error::<TestRuntime>::CannotUpdateFarmWrongTwin
+		);
+	});
+}
+
+#[test]
 fn create_node_with_same_pubkey_fails() {
 	ExternalityBuilder::build().execute_with(|| {
 		create_entity();
