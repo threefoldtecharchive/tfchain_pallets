@@ -42,7 +42,7 @@ decl_event!(
     {
         ContractCreated(types::Contract),
         ContractUpdated(types::Contract),
-        NodeContractCanceled(u64, u32),
+        NodeContractCanceled(u64, u32, u32),
         NameContractCanceled(u64),
         IPsReserved(u64, Vec<pallet_tfgrid_types::PublicIP>),
         IPsFreed(u64, Vec<Vec<u8>>),
@@ -296,7 +296,7 @@ impl<T: Config> Module<T> {
                     node_contract.node_id,
                     &node_contract.deployment_hash,
                 );
-                Self::deposit_event(RawEvent::NodeContractCanceled(contract_id, node_contract.node_id));
+                Self::deposit_event(RawEvent::NodeContractCanceled(contract_id, node_contract.node_id, contract.twin_id));
             }
             types::ContractData::NameContract(name_contract) => {
                 ContractIDByNameRegistration::remove(name_contract.name);
