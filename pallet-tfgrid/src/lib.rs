@@ -225,6 +225,7 @@ decl_error! {
         CannotCreateFarmWrongTwin,
         CannotUpdateFarmWrongTwin,
         CannotDeleteFarm,
+        CannotDeleteFarmWithPublicIPs,
         CannotDeleteFarmWrongTwin,
         IpExists,
         IpNotExists,
@@ -424,6 +425,8 @@ decl_module! {
 
             ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
             let stored_farm = Farms::get(id);
+
+            ensure!(stored_farm.public_ips.len() == 0, Error::<T>::CannotDeleteFarmWithPublicIPs);
 
             let twin = Twins::<T>::get(stored_farm.twin_id);
             ensure!(twin.account_id == address, Error::<T>::CannotDeleteFarmWrongTwin);

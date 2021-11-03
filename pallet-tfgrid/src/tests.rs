@@ -237,6 +237,29 @@ fn test_adding_ip_to_farm_works() {
 }
 
 #[test]
+fn test_delete_farm_with_publicips_fails(){
+	ExternalityBuilder::build().execute_with(|| {
+		create_entity();
+		create_twin();
+		create_farm();
+		assert_noop!(
+			TfgridModule::delete_farm(Origin::signed(alice()), 1),Error::<TestRuntime>::CannotDeleteFarmWithPublicIPs
+		);
+	});
+}
+
+#[test]
+fn test_delete_farm_without_publicips_works(){
+	ExternalityBuilder::build().execute_with(|| {
+		create_entity();
+		create_twin();
+		create_farm();
+		assert_ok!(TfgridModule::remove_farm_ip(Origin::signed(alice()), 1, "1.1.1.0".as_bytes().to_vec()));
+		assert_ok!(TfgridModule::delete_farm(Origin::signed(alice()), 1));
+	});
+}
+
+#[test]
 fn test_adding_ip_duplicate_to_farm_fails() {
 	ExternalityBuilder::build().execute_with(|| {
 		create_entity();
