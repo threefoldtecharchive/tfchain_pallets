@@ -225,6 +225,8 @@ decl_error! {
         CannotCreateFarmWrongTwin,
         CannotUpdateFarmWrongTwin,
         CannotDeleteFarm,
+        CannotDeleteFarmWithPublicIPs,
+        CannotDeleteFarmWithNodesAssigned,
         CannotDeleteFarmWrongTwin,
         IpExists,
         IpNotExists,
@@ -424,7 +426,14 @@ decl_module! {
 
             ensure!(Farms::contains_key(id), Error::<T>::FarmNotExists);
             let stored_farm = Farms::get(id);
-
+            // make sure farm doesn't have public ips assigned
+            ensure!(stored_farm.public_ips.len() == 0, Error::<T>::CannotDeleteFarmWithPublicIPs);
+            // make sure farm doesn't have nodes assigned
+            for (_, node) in Nodes::iter(){
+                if node.farm_id == id {
+                    return Err(Error::<T>::CannotDeleteFarmWithNodesAssigned.into())
+                }
+            }
             let twin = Twins::<T>::get(stored_farm.twin_id);
             ensure!(twin.account_id == address, Error::<T>::CannotDeleteFarmWrongTwin);
 
@@ -488,7 +497,7 @@ decl_module! {
             Self::deposit_event(RawEvent::NodeStored(new_node));
 
             Ok(())
-        }
+        } 
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {

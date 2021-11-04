@@ -4,5 +4,6 @@ members = [
     "pallet-tfgrid",
     "pallet-smart-contract",
     "pallet-vesting-validator",
-    "pallet-burning"
+    "pallet-burning",
+    "pallet-kvstore",
 ]
