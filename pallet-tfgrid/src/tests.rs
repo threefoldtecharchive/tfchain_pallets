@@ -351,6 +351,21 @@ fn test_create_farm_with_same_name_fails() {
 }
 
 #[test]
+fn test_farm_add_stellar_payout_address() {
+	ExternalityBuilder::build().execute_with(|| {		
+		create_entity();
+		create_twin();
+		create_farm();
+
+		let addr = "some_address".as_bytes().to_vec();
+		assert_ok!(TfgridModule::add_stellar_payout_v2address(Origin::signed(alice()), 1, addr));
+
+		let addr2 = "some_other_address".as_bytes().to_vec();
+		assert_ok!(TfgridModule::add_stellar_payout_v2address(Origin::signed(alice()), 1, addr2));
+	});
+}
+
+#[test]
 fn create_node_works() {
 	ExternalityBuilder::build().execute_with(|| {
 		create_entity();

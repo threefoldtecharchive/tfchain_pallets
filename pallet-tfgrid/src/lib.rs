@@ -350,7 +350,6 @@ decl_module! {
 
             ensure!(farm.twin_id == twin_id, Error::<T>::CannotUpdateFarmWrongTwin);
             
-            ensure!(!FarmPayoutV2AddressByFarmID::contains_key(farm_id), Error::<T>::FarmPayoutAdressAlreadyRegistered);
             FarmPayoutV2AddressByFarmID::insert(&farm_id, &stellar_address);
 
             Self::deposit_event(RawEvent::FarmPayoutV2AddressRegistered(farm_id, stellar_address));
