@@ -520,6 +520,9 @@ mod test {
 		fn kick(w: u32) -> Weight {
 			unimplemented!()
 		}
+		fn set_staking_pool_account() -> Weight {
+			unimplemented!()
+		}
 	}
 
 	#[test]

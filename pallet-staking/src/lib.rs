@@ -279,7 +279,6 @@ pub mod benchmarking;
 
 pub mod slashing;
 pub mod offchain_election;
-pub mod inflation;
 pub mod weights;
 
 use sp_std::{
@@ -300,13 +299,12 @@ use frame_support::{
 	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote, IsSubType,
-	}
+		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote, IsSubType, ExistenceRequirement,
+	},
 };
 use pallet_session::historical;
 use sp_runtime::{
 	Percent, Perbill, PerU16, RuntimeDebug, DispatchError,
-	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
 		AtLeast32BitUnsigned, Dispatchable,
@@ -824,10 +822,6 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
 
-	/// The NPoS reward curve used to define yearly inflation.
-	/// See [Era payout](./index.html#era-payout).
-	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
-
 	/// Something that can estimate the next session change, accurately or as a best effort guess.
 	type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
 
@@ -1021,6 +1015,11 @@ decl_storage! {
 		pub ErasTotalStake get(fn eras_total_stake):
 			map hasher(twox_64_concat) EraIndex => BalanceOf<T>;
 
+		/// Accumulated balances for the last `HISTORY_DEPTH` eras.
+        /// If a balance hasn't been set or has been removed then 0 balance is returned.
+        pub ErasAccumulatedBalance get(fn eras_accumulated_balance):
+            map hasher(twox_64_concat) EraIndex => BalanceOf<T>;
+
 		/// Mode of era forcing.
 		pub ForceEra get(fn force_era) config(): Forcing;
 
@@ -1089,6 +1088,8 @@ decl_storage! {
 		/// True if the current **planned** session is final. Note that this does not take era
 		/// forcing into account.
 		pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
+
+		pub StakingPoolAccount get(fn staking_pool_account): T::AccountId;
 
 		/// True if network has been upgraded to this version.
 		/// Storage version of the pallet.
@@ -2256,6 +2257,15 @@ decl_module! {
 
 			Ok(())
 		}
+
+		#[weight = T::WeightInfo::set_staking_pool_account()]
+		pub fn set_staking_pool_account(origin, target: T::AccountId) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
+			StakingPoolAccount::<T>::set(target);
+
+			Ok(())
+		}
 	}
 }
 
@@ -2399,12 +2409,11 @@ impl<T: Config> Module<T> {
 		);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
+
+        let validator_effective_payout = validator_staking_payout + validator_commission_payout;
 		// We can now make total validator payout:
-		if let Some(imbalance) = Self::make_payout(
-			&ledger.stash,
-			validator_staking_payout + validator_commission_payout
-		) {
-			Self::deposit_event(RawEvent::Reward(ledger.stash, imbalance.peek()));
+		if Self::make_payout(&ledger.stash, validator_effective_payout).is_ok() {
+			Self::deposit_event(RawEvent::Reward(ledger.stash, validator_effective_payout));
 		}
 
 		// Lets now calculate how this is split to the nominators.
@@ -2417,8 +2426,8 @@ impl<T: Config> Module<T> {
 
 			let nominator_reward: BalanceOf<T> = nominator_exposure_part * validator_leftover_payout;
 			// We can now make nominator payout:
-			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
-				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
+			if Self::make_payout(&nominator.who, nominator_reward).is_ok() {
+				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), nominator_reward));
 			}
 		}
 
@@ -2447,32 +2456,44 @@ impl<T: Config> Module<T> {
 		<Nominators<T>>::remove(stash);
 	}
 
-	/// Actually make a payment to a staker. This uses the currency's reward function
-	/// to pay the right payee for the given staker account.
-	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
-		let dest = Self::payee(stash);
-		match dest {
-			RewardDestination::Controller => Self::bonded(stash)
-				.and_then(|controller|
-					Some(T::Currency::deposit_creating(&controller, amount))
-				),
-			RewardDestination::Stash =>
-				T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked => Self::bonded(stash)
-				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
-				.and_then(|(controller, mut l)| {
-					l.active += amount;
-					l.total += amount;
-					let r = T::Currency::deposit_into_existing(stash, amount).ok();
-					Self::update_ledger(&controller, &l);
-					r
-				}),
-			RewardDestination::Account(dest_account) => {
-				Some(T::Currency::deposit_creating(&dest_account, amount))
-			}
-		}
-	}
-
+    /// Actually make a payment to a staker. This uses the currency's reward function
+    /// to pay the right payee for the given staker account.
+    fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> result::Result<(), ()> {
+		let staking_pool_account = StakingPoolAccount::<T>::get();
+        let imbalance = T::Currency::withdraw(
+            &staking_pool_account,
+            amount,
+            WithdrawReasons::all(),
+            ExistenceRequirement::KeepAlive,
+        )
+        .map_err(|_| ())?;
+        match Self::payee(stash) {
+            RewardDestination::Controller => match Self::bonded(stash) {
+                Some(controller) => Ok(T::Currency::resolve_creating(&controller, imbalance)),
+                None => Err(()),
+            },
+            RewardDestination::Stash => {
+                T::Currency::resolve_into_existing(stash, imbalance).map_err(|_| ())
+            }
+            RewardDestination::Staked => {
+                match Self::bonded(stash).and_then(|c| Self::ledger(&c).map(|l| (c, l))) {
+                    Some((controller, mut l)) => {
+                        l.active += imbalance.peek();
+                        l.total += imbalance.peek();
+                        let r =
+                            T::Currency::resolve_into_existing(stash, imbalance).map_err(|_| ());
+                        Self::update_ledger(&controller, &l);
+                        r
+                    }
+                    None => Err(()),
+                }
+            }
+            RewardDestination::Account(dest_account) => {
+                T::Currency::resolve_creating(&dest_account, imbalance);
+                Ok(())
+            }
+        }
+    }
 	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
@@ -2794,29 +2815,26 @@ impl<T: Config> Module<T> {
 		Self::apply_unapplied_slashes(active_era);
 	}
 
-	/// Compute payout for era.
-	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
-		// Note: active_era_start can be None if end era is called during genesis config.
-		if let Some(active_era_start) = active_era.start {
-			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
+    /// Compute payout for era.
+    fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
+        // Note: active_era_start can be None if end era is called during genesis config.
+        if let Some(_active_era_start) = active_era.start {
+			let staking_pool_account = StakingPoolAccount::<T>::get();
 
-			let era_duration = now_as_millis_u64 - active_era_start;
-			let (validator_payout, max_payout) = inflation::compute_total_payout(
-				&T::RewardCurve::get(),
-				Self::eras_total_stake(&active_era.index),
-				T::Currency::total_issuance(),
-				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
-				era_duration.saturated_into::<u64>(),
-			);
-			let rest = max_payout.saturating_sub(validator_payout);
+			// get balance of staking pool account
+			// use %1 of the balance as payout
+			let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&staking_pool_account);
+			let balance_u128: u128 = balance.saturated_into::<u128>();
 
-			Self::deposit_event(RawEvent::EraPayout(active_era.index, validator_payout, rest));
+			let payout_as_u128 = balance_u128 / 100;
+			let payout: BalanceOf<T> = BalanceOf::<T>::saturated_from(payout_as_u128);
 
-			// Set ending era reward.
-			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
-			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
-		}
-	}
+			Self::deposit_event(RawEvent::EraPayout(active_era.index, payout, Zero::zero()));
+
+            // Set ending era reward.
+            <ErasValidatorReward<T>>::insert(&active_era.index, payout);
+        }
+    }
 
 	/// Plan a new era. Return the potential new staking set.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
