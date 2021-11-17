@@ -1015,11 +1015,6 @@ decl_storage! {
 		pub ErasTotalStake get(fn eras_total_stake):
 			map hasher(twox_64_concat) EraIndex => BalanceOf<T>;
 
-		/// Accumulated balances for the last `HISTORY_DEPTH` eras.
-        /// If a balance hasn't been set or has been removed then 0 balance is returned.
-        pub ErasAccumulatedBalance get(fn eras_accumulated_balance):
-            map hasher(twox_64_concat) EraIndex => BalanceOf<T>;
-
 		/// Mode of era forcing.
 		pub ForceEra get(fn force_era) config(): Forcing;
 
