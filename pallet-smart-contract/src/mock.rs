@@ -8,7 +8,7 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::MultiSignature;
 use sp_runtime::{
     testing::{Header, TestXt},
-	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup},
+    traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup},
 };
 use sp_std::prelude::*;
 
@@ -85,8 +85,8 @@ impl pallet_tfgrid::Config for TestRuntime {
 
 impl pallet_tft_price::Config for TestRuntime {
     type Event = Event;
-	type AuthorityId = pallet_tft_price::crypto::AuthId;
-	type Call = Call;
+    type AuthorityId = pallet_tft_price::crypto::AuthId;
+    type Call = Call;
 }
 
 impl pallet_timestamp::Config for TestRuntime {
@@ -111,30 +111,30 @@ fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public
 }
 
 impl frame_system::offchain::SigningTypes for TestRuntime {
-	type Public = <Signature as Verify>::Signer;
-	type Signature = Signature;
+    type Public = <Signature as Verify>::Signer;
+    type Signature = Signature;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for TestRuntime
 where
-	Call: From<C>,
+    Call: From<C>,
 {
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
+    type OverarchingCall = Call;
+    type Extrinsic = Extrinsic;
 }
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for TestRuntime
 where
-	Call: From<LocalCall>,
+    Call: From<LocalCall>,
 {
-	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-		call: Call,
-		_public: <Signature as Verify>::Signer,
-		_account: AccountId,
-		nonce: u64,
-	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-		Some((call, (nonce, ())))
-	}
+    fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+        call: Call,
+        _public: <Signature as Verify>::Signer,
+        _account: AccountId,
+        nonce: u64,
+    ) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+        Some((call, (nonce, ())))
+    }
 }
 
 /// Helper function to generate an account ID from seed
