@@ -1103,7 +1103,9 @@ decl_storage! {
     add_extra_genesis {
         config(stakers):
             Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
+		config(staking_pool_account): T::AccountId;
         build(|config: &GenesisConfig<T>| {
+			StakingPoolAccount::<T>::set(config.staking_pool_account.clone());
             for &(ref stash, ref controller, balance, ref status) in &config.stakers {
                 assert!(
                     T::Currency::free_balance(&stash) >= balance,
