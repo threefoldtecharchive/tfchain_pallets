@@ -2256,7 +2256,7 @@ decl_module! {
 		#[weight = T::WeightInfo::set_staking_pool_account()]
 		pub fn set_staking_pool_account(origin, target: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
-			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
+
 			StakingPoolAccount::<T>::set(target);
 
 			Ok(())
