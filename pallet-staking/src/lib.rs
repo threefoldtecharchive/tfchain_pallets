@@ -2262,15 +2262,6 @@ decl_module! {
 
             Ok(())
         }
-
-        #[weight = T::WeightInfo::set_staking_pool_account()]
-        pub fn set_staking_pool_account(origin, target: T::AccountId) -> DispatchResult {
-            ensure_root(origin)?;
-
-            StakingPoolAccount::<T>::set(target);
-
-            Ok(())
-        }
     }
 }
 
