@@ -1276,7 +1276,6 @@ dependencies = [
  "pallet-authorship",
  "pallet-balances",
  "pallet-session",
- "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
  "parking_lot",
@@ -1293,18 +1292,6 @@ dependencies = [
  "sp-tracing",
  "static_assertions",
  "substrate-test-utils",
-]
-
-[[package]]
-name = "pallet-staking-reward-curve"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cb16d9e2597ce7cfc786b0ebf09cd5e6375fc65df6f38cd7e67797ec7bda990"
-dependencies = [
- "proc-macro-crate 0.1.5",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
