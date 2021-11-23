@@ -1,5 +1,7 @@
 # Staking Module
 
+> **forked from https://github.com/paritytech/substrate/tree/v3.0.0/frame/staking**
+
 The Staking module is used to manage funds at stake by network maintainers.
 
 - [`staking::Trait`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html)
