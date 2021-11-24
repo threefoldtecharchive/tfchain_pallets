@@ -389,9 +389,6 @@ pub type OffchainAccuracy = PerU16;
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
-    <T as frame_system::Config>::AccountId,
->>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
     <T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
@@ -806,9 +803,6 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 
     /// Handler for the unbalanced reduction when slashing a staker.
     type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
-
-    /// Handler for the unbalanced increment when rewarding a staker.
-    type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
     /// Number of sessions per era.
     type SessionsPerEra: Get<SessionIndex>;

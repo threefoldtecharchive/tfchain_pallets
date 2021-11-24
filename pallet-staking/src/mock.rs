@@ -239,7 +239,6 @@ impl Config for Test {
     type RewardRemainder = RewardRemainderMock;
     type Event = Event;
     type Slash = ();
-    type Reward = ();
     type SessionsPerEra = SessionsPerEra;
     type SlashDeferDuration = SlashDeferDuration;
     type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
