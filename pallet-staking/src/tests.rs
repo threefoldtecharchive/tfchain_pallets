@@ -232,6 +232,7 @@ fn rewards_should_work() {
             // Compute total payout now for whole duration of the session.
             let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
             let maximum_payout = maximum_payout_for_duration(reward_time_per_era());
+            assert_eq!(total_payout_0, maximum_payout);
 
             start_session(1);
 
@@ -271,13 +272,13 @@ fn rewards_should_work() {
             assert_eq_error_rate!(
                 Balances::total_balance(&10),
                 init_balance_10 + part_for_10 * total_payout_0 * 2 / 3,
-                2,
+                6,
             );
             assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2,);
             assert_eq_error_rate!(
                 Balances::total_balance(&20),
                 init_balance_20 + part_for_20 * total_payout_0 * 1 / 3,
-                2,
+                6,
             );
             assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2,);
             assert_eq_error_rate!(
@@ -285,7 +286,7 @@ fn rewards_should_work() {
                 init_balance_100
                     + part_for_100_from_10 * total_payout_0 * 2 / 3
                     + part_for_100_from_20 * total_payout_0 * 1 / 3,
-                2
+                6
             );
             assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
@@ -297,25 +298,21 @@ fn rewards_should_work() {
 
             mock::start_active_era(2);
             assert_eq!(
-                mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
-                maximum_payout * 2 - total_payout_0 - total_payout_1,
-            );
-            assert_eq!(
                 *mock::staking_events().last().unwrap(),
-                RawEvent::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
+                RawEvent::EraPayout(1, total_payout_1, 0)
             );
             mock::make_all_reward_payment(1);
 
             assert_eq_error_rate!(
                 Balances::total_balance(&10),
                 init_balance_10 + part_for_10 * (total_payout_0 * 2 / 3 + total_payout_1),
-                2,
+                6,
             );
             assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2,);
             assert_eq_error_rate!(
                 Balances::total_balance(&20),
                 init_balance_20 + part_for_20 * total_payout_0 * 1 / 3,
-                2,
+                6,
             );
             assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2,);
             assert_eq_error_rate!(
@@ -323,7 +320,7 @@ fn rewards_should_work() {
                 init_balance_100
                     + part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
                     + part_for_100_from_20 * total_payout_0 * 1 / 3,
-                2
+                6
             );
             assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
         });
@@ -622,26 +619,26 @@ fn nominating_and_rewards_should_work() {
             assert_eq_error_rate!(
                 Balances::total_balance(&2),
                 initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
-                2,
+                8,
             );
             // Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
             assert_eq_error_rate!(
                 Balances::total_balance(&4),
                 initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
-                2,
+                8,
             );
 
             // Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
             assert_eq_error_rate!(
                 Balances::total_balance(&10),
                 initial_balance + 5 * payout_for_10 / 9,
-                2,
+                8,
             );
             // Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
             assert_eq_error_rate!(
                 Balances::total_balance(&20),
                 initial_balance + 5 * payout_for_20 / 11,
-                2,
+                8,
             );
         });
 }
@@ -1143,12 +1140,12 @@ fn validator_payment_prefs_work() {
         assert_eq_error_rate!(
             Balances::total_balance(&10),
             balance_era_1_10 + reward_of_10,
-            2
+            5
         );
         assert_eq_error_rate!(
             Balances::total_balance(&100),
             balance_era_1_100 + reward_of_100,
-            2
+            5
         );
     });
 }
@@ -2092,7 +2089,7 @@ fn bond_with_little_staked_value_bounded() {
             assert_eq_error_rate!(
                 Balances::free_balance(10),
                 init_balance_10 + total_payout_0 / 3,
-                1
+                3
             );
             // no rewards paid to 2. This was initial election.
             assert_eq!(Balances::free_balance(2), init_balance_2);
@@ -2110,12 +2107,12 @@ fn bond_with_little_staked_value_bounded() {
             assert_eq_error_rate!(
                 Balances::free_balance(2),
                 init_balance_2 + total_payout_1 / 3,
-                1
+                3
             );
             assert_eq_error_rate!(
                 Balances::free_balance(&10),
                 init_balance_10 + total_payout_0 / 3 + total_payout_1 / 3,
-                2,
+                6,
             );
         });
 }
@@ -2333,7 +2330,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
         ErasStakersClipped::<Test>::insert(0, 11, exposure);
         ErasValidatorReward::<Test>::insert(0, stake);
         assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 0));
-        assert_eq!(Balances::total_balance(&11), stake * 2);
+        assert_eq!(Balances::total_balance(&11), stake);
 
         // Set staker
         let _ = Balances::make_free_balance_be(&11, stake);
@@ -4635,27 +4632,18 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
         Payee::<Test>::insert(101, RewardDestination::Controller);
 
         <Module<Test>>::reward_by_ids(vec![(11, 1)]);
-        // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
         mock::start_active_era(1);
 
         <Module<Test>>::reward_by_ids(vec![(11, 1)]);
-        // Change total issuance in order to modify total payout
-        let _ = Balances::deposit_creating(&999, 1_000_000_000);
         // Compute total payout now for whole duration as other parameter won't change
         let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-        assert!(total_payout_1 != total_payout_0);
 
         mock::start_active_era(2);
 
         <Module<Test>>::reward_by_ids(vec![(11, 1)]);
-        // Change total issuance in order to modify total payout
-        let _ = Balances::deposit_creating(&999, 1_000_000_000);
         // Compute total payout now for whole duration as other parameter won't change
         let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
-        assert!(total_payout_2 != total_payout_0);
-        assert!(total_payout_2 != total_payout_1);
 
         mock::start_active_era(Staking::history_depth() + 1);
 
@@ -4891,9 +4879,9 @@ fn test_payout_stakers() {
 
             // Top 64 nominators of validator 11 automatically paid out, including the validator
             // Validator payout goes to controller.
-            assert!(Balances::free_balance(&10) > balance);
+            assert!(Balances::free_balance(&10) >= balance);
             for i in 36..100 {
-                assert!(Balances::free_balance(&(100 + i)) > balance + i as Balance);
+                assert!(Balances::free_balance(&(100 + i)) >= balance + i as Balance);
             }
             // The bottom 36 do not
             for i in 0..36 {

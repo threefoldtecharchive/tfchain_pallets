@@ -31,7 +31,6 @@ use sp_npos_elections::{
     reduce, to_support_map, ElectionScore, EvaluateSupport, ExtendedBalance, StakedAssignment,
 };
 use sp_runtime::{
-    curve::PiecewiseLinear,
     testing::{Header, TestXt, UintAuthorityId},
     traits::{IdentityLookup, Zero},
 };
@@ -246,7 +245,6 @@ impl Config for Test {
     type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
     type BondingDuration = BondingDuration;
     type SessionInterface = Self;
-    type RewardCurve = RewardCurve;
     type NextNewSession = Session;
     type ElectionLookahead = ElectionLookahead;
     type Call = Call;
@@ -408,6 +406,7 @@ impl ExtBuilder {
                 (101, 2000 * balance_factor),
                 // This allows us to have a total_payout different from 0.
                 (999, 1_000_000_000_000),
+                (1000, 1_000_000_000_000),
             ],
         }
         .assimilate_storage(&mut storage);
@@ -452,6 +451,7 @@ impl ExtBuilder {
             minimum_validator_count: self.minimum_validator_count,
             invulnerables: self.invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
+            staking_pool_account: 1000,
             ..Default::default()
         }
         .assimilate_storage(&mut storage);
@@ -682,26 +682,34 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
     assert_eq!(current_era(), active_era());
 }
 
-pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
-    let reward = inflation::compute_total_payout(
-        <Test as Config>::RewardCurve::get(),
-        Staking::eras_total_stake(active_era()),
-        Balances::total_issuance(),
-        duration,
-    )
-    .0;
-    assert!(reward > 0);
-    reward
+use sp_runtime::traits::SaturatedConversion;
+
+pub(crate) fn current_total_payout_for_duration(_duration: u64) -> Balance {
+    let staking_pool_account = <StakingPoolAccount<Test>>::get();
+
+    // get balance of staking pool account
+    // use %1 of the balance as payout
+    let balance= Balances::free_balance(&staking_pool_account);
+    let balance_u128: u128 = balance.saturated_into::<u128>();
+
+    let payout_as_u128 = balance_u128 / 100;
+    let payout = Balance::saturated_from(payout_as_u128);
+
+    payout
 }
 
-pub(crate) fn maximum_payout_for_duration(duration: u64) -> Balance {
-    inflation::compute_total_payout(
-        <Test as Config>::RewardCurve::get(),
-        0,
-        Balances::total_issuance(),
-        duration,
-    )
-    .1
+pub(crate) fn maximum_payout_for_duration(_duration: u64) -> Balance {
+    let staking_pool_account = <StakingPoolAccount<Test>>::get();
+
+    // get balance of staking pool account
+    // use %1 of the balance as payout
+    let balance= Balances::free_balance(&staking_pool_account);
+    let balance_u128: u128 = balance.saturated_into::<u128>();
+
+    let payout_as_u128 = balance_u128 / 100;
+    let payout = Balance::saturated_from(payout_as_u128);
+
+    payout
 }
 
 /// Time it takes to finish a session.
