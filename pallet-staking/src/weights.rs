@@ -246,8 +246,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
     }
     fn set_slashing_beneficiary() -> Weight {
         (20_228_000 as Weight)
-            .saturating_add(T::DbWeight::get().reads(2 as Weight))
-            .saturating_add(T::DbWeight::get().writes(2 as Weight))
+            .saturating_add(T::DbWeight::get().reads(1 as Weight))
+            .saturating_add(T::DbWeight::get().writes(1 as Weight))
     }
 }
 
@@ -422,7 +422,7 @@ impl WeightInfo for () {
     }
     fn set_slashing_beneficiary() -> Weight {
         (20_228_000 as Weight)
-            .saturating_add(RocksDbWeight::get().reads(2 as Weight))
-            .saturating_add(RocksDbWeight::get().writes(2 as Weight))
+            .saturating_add(RocksDbWeight::get().reads(1 as Weight))
+            .saturating_add(RocksDbWeight::get().writes(1 as Weight))
     }
 }
