@@ -1006,11 +1006,6 @@ impl<T: Config> Module<T> {
         // Decode signature into a ed25519 signature
         let ed25519_signature = sp_core::ed25519::Signature::from_raw(signature);
 
-        // let mut message = Vec::new();
-        // message.extend_from_slice(&name);
-        // message.extend_from_slice(&country);
-        // message.extend_from_slice(&city);
-
         sp_io::crypto::ed25519_verify(&ed25519_signature, &payload, &entity_pubkey_ed25519)
     }
 
@@ -1018,11 +1013,6 @@ impl<T: Config> Module<T> {
         let entity_pubkey_sr25519 = Self::convert_account_to_sr25519(target);
         // Decode signature into a sr25519 signature
         let sr25519_signature = sp_core::sr25519::Signature::from_raw(signature);
-
-        // let mut message = Vec::new();
-        // message.extend_from_slice(&name);
-        // message.extend_from_slice(&country);
-        // message.extend_from_slice(&city);
 
         sp_io::crypto::sr25519_verify(&sr25519_signature, &payload, &entity_pubkey_sr25519)
     }
