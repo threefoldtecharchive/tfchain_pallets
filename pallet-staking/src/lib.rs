@@ -2466,7 +2466,7 @@ impl<T: Config> Module<T> {
             &staking_reward_account,
             amount,
             WithdrawReasons::all(),
-            ExistenceRequirement::KeepAlive,
+            ExistenceRequirement::AllowDeath,
         )
         .map_err(|_| ())?;
         match Self::payee(stash) {
@@ -2864,7 +2864,7 @@ impl<T: Config> Module<T> {
                 &staking_pool_account,
                 &staking_reward_account,
                 payout,
-                ExistenceRequirement::KeepAlive,
+                ExistenceRequirement::AllowDeath,
             ).unwrap();
             //  {
             //     Ok(_) => return,
