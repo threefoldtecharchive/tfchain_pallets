@@ -1085,12 +1085,13 @@ decl_storage! {
         /// True if the current **planned** session is final. Note that this does not take era
         /// forcing into account.
         pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
-
+        /// The account from which the payouts for the npos are taken
         pub StakingPoolAccount get(fn staking_pool_account): T::AccountId;
-
 
         // Intermediate account where the staking rewards are sent to when they are ready to be claimed.
         pub StakingRewardAccount get(fn staking_reward_account): T::AccountId;
+        /// The beneficiary account for slashes
+        pub SlashingBeneficiary get(fn slashing_benefifiary): T::AccountId;
 
         /// True if network has been upgraded to this version.
         /// Storage version of the pallet.
@@ -1101,11 +1102,14 @@ decl_storage! {
     add_extra_genesis {
         config(stakers):
             Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
-		config(staking_pool_account): T::AccountId;
+        config(staking_pool_account): T::AccountId;
+        config(slashing_beneficiary): T::AccountId;
         config(staking_reward_account): T::AccountId;
         build(|config: &GenesisConfig<T>| {
-			StakingPoolAccount::<T>::set(config.staking_pool_account.clone());
+            StakingPoolAccount::<T>::set(config.staking_pool_account.clone());
+            SlashingBeneficiary::<T>::set(config.slashing_beneficiary.clone());
             StakingRewardAccount::<T>::set(config.staking_reward_account.clone());
+
             for &(ref stash, ref controller, balance, ref status) in &config.stakers {
                 assert!(
                     T::Currency::free_balance(&stash) >= balance,
@@ -2262,6 +2266,16 @@ decl_module! {
 
             Ok(())
         }
+
+        #[weight = T::WeightInfo::set_slashing_beneficiary()]
+        pub fn set_slashing_beneficiary(origin, target: T::AccountId) -> DispatchResult {
+            ensure_root(origin)?;
+
+            SlashingBeneficiary::<T>::set(target);
+
+            Ok(())
+        }
+
     }
 }
 

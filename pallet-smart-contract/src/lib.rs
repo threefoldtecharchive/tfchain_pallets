@@ -8,11 +8,11 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult};
 
-use substrate_fixed::types::U64F64;
 use pallet_tfgrid;
 use pallet_tfgrid::types as pallet_tfgrid_types;
 use pallet_tft_price;
 use pallet_timestamp as timestamp;
+use substrate_fixed::types::U64F64;
 
 #[cfg(test)]
 mod mock;
@@ -296,7 +296,11 @@ impl<T: Config> Module<T> {
                     node_contract.node_id,
                     &node_contract.deployment_hash,
                 );
-                Self::deposit_event(RawEvent::NodeContractCanceled(contract_id, node_contract.node_id, contract.twin_id));
+                Self::deposit_event(RawEvent::NodeContractCanceled(
+                    contract_id,
+                    node_contract.node_id,
+                    contract.twin_id,
+                ));
             }
             types::ContractData::NameContract(name_contract) => {
                 ContractIDByNameRegistration::remove(name_contract.name);
@@ -438,7 +442,6 @@ impl<T: Config> Module<T> {
     pub fn _bill_contracts_at_block(block: T::BlockNumber) -> DispatchResult {
         let current_block_u64: u64 = block.saturated_into::<u64>();
         let contracts = ContractsToBillAt::get(current_block_u64);
-        debug::info!("Contracts to check at block: {:?}, {:?}", block, contracts);
         for contract_id in contracts {
             let contract = Contracts::get(contract_id);
             if contract.state != types::ContractState::Created {
