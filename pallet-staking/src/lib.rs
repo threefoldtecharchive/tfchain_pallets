@@ -2860,18 +2860,17 @@ impl<T: Config> Module<T> {
             <ErasValidatorReward<T>>::insert(&active_era.index, payout);
 
             let staking_reward_account = StakingRewardAccount::<T>::get();
-            T::Currency::transfer(
+            match T::Currency::transfer(
                 &staking_pool_account,
                 &staking_reward_account,
                 payout,
                 ExistenceRequirement::AllowDeath,
-            ).unwrap();
-            //  {
-            //     Ok(_) => return,
-            //     Err(err) => {
-            //         debug::warn!("error {:?}", err);
-            //     }
-            // };
+            ) {
+               Ok(_) => return,
+               Err(err) => {
+                   debug::warn!("error {:?}", err);
+               }
+           };
         }
     }
 
