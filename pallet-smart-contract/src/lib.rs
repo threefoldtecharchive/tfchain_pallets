@@ -442,7 +442,6 @@ impl<T: Config> Module<T> {
     pub fn _bill_contracts_at_block(block: T::BlockNumber) -> DispatchResult {
         let current_block_u64: u64 = block.saturated_into::<u64>();
         let contracts = ContractsToBillAt::get(current_block_u64);
-        debug::info!("Contracts to check at block: {:?}, {:?}", block, contracts);
         for contract_id in contracts {
             let contract = Contracts::get(contract_id);
             if contract.state != types::ContractState::Created {
