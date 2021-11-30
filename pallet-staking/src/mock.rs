@@ -451,6 +451,7 @@ impl ExtBuilder {
             invulnerables: self.invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
             staking_pool_account: 1000,
+            staking_reward_account: 1001,
             ..Default::default()
         }
         .assimilate_storage(&mut storage);
@@ -684,31 +685,31 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
 use sp_runtime::traits::SaturatedConversion;
 
 pub(crate) fn current_total_payout_for_duration(_duration: u64) -> Balance {
-    let staking_pool_account = <StakingPoolAccount<Test>>::get();
+    let staking_pool_account = <StakingRewardAccount<Test>>::get();
 
     // get balance of staking pool account
     // use %1 of the balance as payout
-    let balance= Balances::free_balance(&staking_pool_account);
-    let balance_u128: u128 = balance.saturated_into::<u128>();
+    let balance = Balances::free_balance(&staking_pool_account);
+    // let balance_u128: u128 = balance.saturated_into::<u128>();
 
-    let payout_as_u128 = balance_u128 / 100;
-    let payout = Balance::saturated_from(payout_as_u128);
+    // let payout_as_u128 = balance_u128 / 100;
+    // let payout = Balance::saturated_from(payout_as_u128);
 
-    payout
+    balance
 }
 
 pub(crate) fn maximum_payout_for_duration(_duration: u64) -> Balance {
-    let staking_pool_account = <StakingPoolAccount<Test>>::get();
+    let staking_pool_account = <StakingRewardAccount<Test>>::get();
 
     // get balance of staking pool account
     // use %1 of the balance as payout
-    let balance= Balances::free_balance(&staking_pool_account);
-    let balance_u128: u128 = balance.saturated_into::<u128>();
+    let balance = Balances::free_balance(&staking_pool_account);
+    // let balance_u128: u128 = balance.saturated_into::<u128>();
 
-    let payout_as_u128 = balance_u128 / 100;
-    let payout = Balance::saturated_from(payout_as_u128);
+    // let payout_as_u128 = balance_u128 / 100;
+    // let payout = Balance::saturated_from(payout_as_u128);
 
-    payout
+    balance
 }
 
 /// Time it takes to finish a session.

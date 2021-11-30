@@ -1001,6 +1001,8 @@ fn reward_destination_works() {
         assert_eq!(Balances::free_balance(10), 1);
         // Check the balance of the stash account
         assert_eq!(Balances::free_balance(11), 1000);
+        // Check the balance of the reward pool account
+        assert_eq!(Balances::free_balance(1001), 0);
         // Check how much is at stake
         assert_eq!(
             Staking::ledger(&10),
@@ -1013,12 +1015,22 @@ fn reward_destination_works() {
             })
         );
 
+        // Check the balance of the stash account
+        assert_eq!(Balances::free_balance(1000), 1000000000000);
+        assert_eq!(Balances::free_balance(1001), 0);
+
         // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
+        let total_payout_0 = 0;
+        assert_eq!(total_payout_0, 0);
+
         <Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
         mock::start_active_era(1);
         mock::make_all_reward_payment(0);
+
+        // Check the balance of the stash account
+        assert_eq!(Balances::free_balance(1000), 990000000000);
+        assert_eq!(Balances::free_balance(1001), 10000000000);
 
         // Check that RewardDestination is Staked (default)
         assert_eq!(Staking::payee(&11), RewardDestination::Staked);
@@ -1039,12 +1051,19 @@ fn reward_destination_works() {
         //Change RewardDestination to Stash
         <Payee<Test>>::insert(&11, RewardDestination::Stash);
 
-        // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
+        
         <Module<Test>>::reward_by_ids(vec![(11, 1)]);
-
+        
         mock::start_active_era(2);
         mock::make_all_reward_payment(1);
+
+        // Check the balance of the stash account
+        assert_eq!(Balances::free_balance(1000), 980100000000);
+        assert_eq!(Balances::free_balance(1001), 9801000000);
+
+        // Compute total payout now for whole duration as other parameter won't change
+        let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
+        assert_eq!(total_payout_1, 9801000000);
 
         // Check that RewardDestination is Stash
         assert_eq!(Staking::payee(&11), RewardDestination::Stash);
