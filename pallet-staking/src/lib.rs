@@ -2261,6 +2261,16 @@ decl_module! {
 
             Ok(())
         }
+
+        #[weight = T::WeightInfo::set_slashing_beneficiary()]
+        pub fn set_staking_pool_account(origin, target: T::AccountId) -> DispatchResult {
+            ensure_root(origin)?;
+
+            SlashingBeneficiary::<T>::set(target);
+
+            Ok(())
+        }
+
     }
 }
 
