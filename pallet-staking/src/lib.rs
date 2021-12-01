@@ -1089,7 +1089,7 @@ decl_storage! {
         pub StakingPoolAccount get(fn staking_pool_account): T::AccountId;
 
         /// The beneficiary account for slashes
-        pub SlashingBeneficiary get(fn slashing_benefifiary): T::AccountId;
+        pub SlashingBeneficiary get(fn slashing_beneficiary): T::AccountId;
 
         /// True if network has been upgraded to this version.
         /// Storage version of the pallet.
