@@ -283,7 +283,7 @@ pub mod weights;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, debug,
+    decl_error, decl_event, decl_module, decl_storage,
     dispatch::{
         DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, WithPostDispatchInfo,
     },
@@ -2862,25 +2862,27 @@ impl<T: Config> Module<T> {
             // use %1 of the balance as payout
             let balance: BalanceOf<T> =
                 <T as Config>::Currency::free_balance(&staking_pool_account);
-            
             let payout = Perbill::from_percent(1) * balance;
-            
             Self::deposit_event(RawEvent::EraPayout(active_era.index, payout, Zero::zero()));
             // Set ending era reward.
             <ErasValidatorReward<T>>::insert(&active_era.index, payout);
 
-            let staking_reward_account = StakingRewardAccount::<T>::get();            
+            let staking_reward_account = StakingRewardAccount::<T>::get();
             match T::Currency::transfer(
                 &staking_pool_account,
                 &staking_reward_account,
                 payout,
                 ExistenceRequirement::AllowDeath,
             ) {
-               Ok(_) => return,
+                Ok(_) => return,
                 Err(err) => {
-                    debug::error!("error transfering era reward to staking reward account {:?}", err);
+                    log!(
+                        error,
+                        "💸 Error transfering era reward to staking reward account : {:?}",
+                        err
+                    );
                 }
-           };
+            };
         }
     }
 
