@@ -164,8 +164,9 @@ pub fn eve() -> AccountId {
 }
 
 pub fn get_staking_pool_account() -> AccountId {
-    // decoded public key from staking pool account 5CNposRewardAccount11111111111111111111111111FSU
-    AccountId::from([13, 209, 209, 166, 229, 163, 90, 168, 199, 245, 229, 126, 30, 221, 12, 63, 189, 106, 191, 46, 170, 142, 244, 37, 72, 152, 110, 84, 162, 86, 32, 0])
+    use sp_core::crypto::Ss58Codec;
+    use sp_runtime::AccountId32;
+    AccountId32::from_ss58check("5CNposRewardAccount11111111111111111111111111FSU").unwrap()
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
