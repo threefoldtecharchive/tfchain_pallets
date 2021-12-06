@@ -32,7 +32,7 @@ construct_runtime!(
         TfgridModule: pallet_tfgrid::{Module, Call, Storage, Event<T>},
         Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
         SmartContractModule: pallet_smart_contract::{Module, Call, Event<T>},
-        TFTPriceModule: pallet_tft_price::{Module, Call, Storage, Event<T>},
+        TFTPriceModule: pallet_tft_price::{Module, Call, Storage, Event<T>}
     }
 );
 
@@ -41,6 +41,7 @@ parameter_types! {
     pub BlockWeights: frame_system::limits::BlockWeights =
         frame_system::limits::BlockWeights::simple_max(1024);
     pub const ExistentialDeposit: u64 = 1;
+    pub StakingPoolAccount: AccountId = get_staking_pool_account();
 }
 
 impl frame_system::Config for TestRuntime {
@@ -99,6 +100,7 @@ impl pallet_timestamp::Config for TestRuntime {
 impl Config for TestRuntime {
     type Event = Event;
     type Currency = Balances;
+    type StakingPoolAccount = StakingPoolAccount;
 }
 
 type AccountPublic = <MultiSignature as Verify>::Signer;
@@ -159,6 +161,11 @@ pub fn ferdie() -> AccountId {
 
 pub fn eve() -> AccountId {
     get_account_id_from_seed::<sr25519::Public>("Eve")
+}
+
+pub fn get_staking_pool_account() -> AccountId {
+    // decoded public key from staking pool account 5CNposRewardAccount11111111111111111111111111FSU
+    AccountId::from([13, 209, 209, 166, 229, 163, 90, 168, 199, 245, 229, 126, 30, 221, 12, 63, 189, 106, 191, 46, 170, 142, 244, 37, 72, 152, 110, 84, 162, 86, 32, 0])
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

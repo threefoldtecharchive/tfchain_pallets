@@ -2,11 +2,10 @@
 
 use frame_support::{
     debug, decl_error, decl_event, decl_module, decl_storage, ensure,
-    traits::Vec,
-    traits::{Currency, ExistenceRequirement::KeepAlive},
+    traits::{Currency, ExistenceRequirement::KeepAlive, Vec, Get},
 };
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult};
+use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult, Perbill};
 
 use pallet_tfgrid;
 use pallet_tfgrid::types as pallet_tfgrid_types;
@@ -25,6 +24,7 @@ pub mod types;
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
     type Currency: Currency<Self::AccountId>;
+    type StakingPoolAccount: Get<Self::AccountId>;
 }
 
 pub const CONTRACT_VERSION: u32 = 1;
@@ -525,8 +525,6 @@ impl<T: Config> Module<T> {
         // Distribute cultivation rewards
         Self::_distribute_cultivation_rewards(
             &contract,
-            &node,
-            &farm,
             &pricing_policy,
             amount_due,
         )?;
@@ -605,85 +603,61 @@ impl<T: Config> Module<T> {
         Ok(())
     }
 
-    // Following: https://github.com/threefoldfoundation/info_threefold/blob/development/wiki/farming/farming3/cultivation_flow.md
+    // Following: https://library.threefold.me/info/threefold#/tfgrid/farming/threefold__proof_of_utilization
     fn _distribute_cultivation_rewards(
         contract: &types::Contract,
-        node: &pallet_tfgrid_types::Node,
-        farm: &pallet_tfgrid_types::Farm,
         pricing_policy: &pallet_tfgrid_types::PricingPolicy<T::AccountId>,
         amount: BalanceOf<T>,
     ) -> DispatchResult {
-        // fetch farmer twin
-        let farmer_twin = pallet_tfgrid::Twins::<T>::get(farm.twin_id);
         // fetch source twin
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 
-        // parse amount
-        let amount = U64F64::from_num(amount.saturated_into::<u128>());
+        // Burn 35%
+        let burned_amount = Perbill::from_percent(35) * amount;
+        <T as Config>::Currency::slash(&twin.account_id, burned_amount);
 
-        let foundation_share = amount * U64F64::from_num(0.3);
-        let mut certified_sales_share = amount * U64F64::from_num(0.6);
-
-        // by default, 10% of the cultivation rewards go to the farmer
-        let mut farmer_share = amount * U64F64::from_num(0.1);
-        // if the farmer is deploying workloads on his own farm, return to him 70% of the total amount
-        if node.farm_id == farm.id {
-            farmer_share = amount * U64F64::from_num(0.7);
-            certified_sales_share = U64F64::from_num(0);
-        }
-
-        // Tranfer to foundation account
-        let foundation_share_balance =
-            BalanceOf::<T>::saturated_from(foundation_share.ceil().to_num::<u128>());
+        // Send 10% to the foundation
+        let foundation_share = Perbill::from_percent(10) * amount;
         debug::info!(
             "Transfering: {:?} from contract twin {:?} to foundation account {:?}",
-            &foundation_share_balance,
+            &foundation_share,
             &twin.account_id,
             &pricing_policy.foundation_account
         );
         <T as Config>::Currency::transfer(
             &twin.account_id,
             &pricing_policy.foundation_account,
-            foundation_share_balance,
+            foundation_share,
             KeepAlive,
         )
         .map_err(|_| DispatchError::Other("Can't make foundation share transfer"))?;
+        
+        // TODO: send 5% to the staking pool account
+        let staking_pool_share = Perbill::from_percent(5) * amount;
+        let staking_pool_account = T::StakingPoolAccount::get();
+        <T as Config>::Currency::transfer(
+            &twin.account_id,
+            &staking_pool_account,
+            staking_pool_share,
+            KeepAlive,
+        )
+        .map_err(|_| DispatchError::Other("Can't make staking pool share transfer"))?;
 
-        // Transfer to farmer account
-        let farmers_share_balance =
-            BalanceOf::<T>::saturated_from(farmer_share.ceil().to_num::<u128>());
+        // Send 50% to the sales channel
+        let sales_share = Perbill::from_percent(50) * amount;
         debug::info!(
             "Transfering: {:?} from contract twin {:?} to foundation account {:?}",
-            &farmers_share_balance,
+            &sales_share,
             &twin.account_id,
-            &farmer_twin.account_id
+            &pricing_policy.certified_sales_account
         );
         <T as Config>::Currency::transfer(
             &twin.account_id,
-            &farmer_twin.account_id,
-            farmers_share_balance,
+            &pricing_policy.certified_sales_account,
+            sales_share,
             KeepAlive,
         )
-        .map_err(|_| DispatchError::Other("Can't make farmer share transfer"))?;
-
-        // Transfer to sales account if applied
-        let certified_sales_share_u128 = certified_sales_share.ceil().to_num::<u128>();
-        if certified_sales_share > 0 {
-            let sales_share_balance = BalanceOf::<T>::saturated_from(certified_sales_share_u128);
-            debug::info!(
-                "Transfering: {:?} from contract twin {:?} to foundation account {:?}",
-                &sales_share_balance,
-                &twin.account_id,
-                &pricing_policy.certified_sales_account
-            );
-            <T as Config>::Currency::transfer(
-                &twin.account_id,
-                &pricing_policy.certified_sales_account,
-                sales_share_balance,
-                KeepAlive,
-            )
-            .map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
-        }
+        .map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
 
         Ok(())
     }

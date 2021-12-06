@@ -1,11 +1,11 @@
 use crate::{mock::*, Error, RawEvent};
+use substrate_fixed::types::{U16F16};
 use frame_support::{
     assert_noop, assert_ok,
     traits::{OnFinalize, OnInitialize},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::SaturatedConversion;
-use substrate_fixed::types::{U16F16, U64F64};
 
 use super::types;
 use pallet_tfgrid::types as pallet_tfgrid_types;
@@ -524,25 +524,17 @@ fn test_node_contract_billing() {
 
         assert_eq!(our_events[2], expected_events[0]);
 
-        // check the farmer twins account and see if it got balanced debited
-        let twin = TfgridModule::twins(1);
-        let b = Balances::free_balance(&twin.account_id);
-        let balances_as_u128: u128 = b.saturated_into::<u128>();
-        // farmer gets 70% of cultivation rewards if he deploys on his own node
-        let amount = U64F64::from_num(4599739) * U64F64::from_num(0.7);
-        let amount_added_to_farmer_balance = amount.ceil().to_num::<u128>();
-        let farmer_balance_should_be = 1000000000000 + amount_added_to_farmer_balance;
-        assert_eq!(balances_as_u128, farmer_balance_should_be);
-
         // check the contract owners address to see if it got balance credited
         let twin = TfgridModule::twins(2);
         let b = Balances::free_balance(&twin.account_id);
         let balances_as_u128: u128 = b.saturated_into::<u128>();
 
-        // TODO figure out why there is 1 unit in diffrence here!!
-        let twin2_balance_should_be = 2500000000 - 4599740 as u128;
-
+        let twin2_balance_should_be = 2500000000 - 4599739 as u128;
         assert_eq!(balances_as_u128, twin2_balance_should_be);
+        
+        let staking_pool_account_balance = Balances::free_balance(&get_staking_pool_account());
+        let staking_pool_account_balance_as_u128: u128 = staking_pool_account_balance.saturated_into::<u128>();
+        assert_eq!(staking_pool_account_balance_as_u128, 229987);
 
         // amount unbilled should have been reset after a transfer between contract owner and farmer
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
