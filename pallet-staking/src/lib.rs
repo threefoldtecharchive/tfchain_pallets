@@ -2474,7 +2474,6 @@ impl<T: Config> Module<T> {
     /// Actually make a payment to a staker. This uses the currency's reward function
     /// to pay the right payee for the given staker account.
     fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> result::Result<(), ()> {
-        // TODO change
         let staking_reward_account = StakingRewardAccount::<T>::get();
         let imbalance = T::Currency::withdraw(
             &staking_reward_account,
@@ -2863,17 +2862,14 @@ impl<T: Config> Module<T> {
             // use %1 of the balance as payout
             let balance: BalanceOf<T> =
                 <T as Config>::Currency::free_balance(&staking_pool_account);
-            let balance_u128: u128 = balance.saturated_into::<u128>();
-
-            let payout_as_u128 = balance_u128 / 100;
-            let payout: BalanceOf<T> = BalanceOf::<T>::saturated_from(payout_as_u128);
-
+            
+            let payout = Perbill::from_percent(1) * balance;
+            
             Self::deposit_event(RawEvent::EraPayout(active_era.index, payout, Zero::zero()));
-
             // Set ending era reward.
             <ErasValidatorReward<T>>::insert(&active_era.index, payout);
 
-            let staking_reward_account = StakingRewardAccount::<T>::get();
+            let staking_reward_account = StakingRewardAccount::<T>::get();            
             match T::Currency::transfer(
                 &staking_pool_account,
                 &staking_reward_account,
@@ -2881,9 +2877,9 @@ impl<T: Config> Module<T> {
                 ExistenceRequirement::AllowDeath,
             ) {
                Ok(_) => return,
-               Err(err) => {
-                   debug::warn!("error {:?}", err);
-               }
+                Err(err) => {
+                    debug::error!("error transfering era reward to staking reward account {:?}", err);
+                }
            };
         }
     }
