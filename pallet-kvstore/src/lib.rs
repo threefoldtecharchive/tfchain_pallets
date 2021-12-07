@@ -16,7 +16,7 @@ pub trait Config: frame_system::Config {
 
 decl_storage! {
     trait Store for Module<T: Config> as TFKVStore {
-        TFKVStore get(fn storag_map):
+        pub TFKVStore get(fn storag_map):
          double_map hasher(blake2_128_concat) T::AccountId,  hasher(blake2_128_concat) Vec<u8> => Vec<u8>;
     }
 }
@@ -64,18 +64,6 @@ decl_module! {
             let user = ensure_signed(origin)?;
             <TFKVStore<T>>::insert(&user, &key, &value);
             Self::deposit_event(RawEvent::EntrySet(user, key, value));
-            Ok(())
-        }
-
-        /// Read the value stored at a particular key and emit it in an event
-        #[weight = 10_000]
-        fn get(origin, key: Vec<u8>) -> DispatchResult {
-            // Any user can get any other user's entry
-            let user = ensure_signed(origin)?;
-
-            ensure!(<TFKVStore<T>>::contains_key(&user, &key), Error::<T>::NoValueStored);
-            let value = <TFKVStore<T>>::get(&user, &key);
-            Self::deposit_event(RawEvent::EntryGot(user, key, value));
             Ok(())
         }
 
