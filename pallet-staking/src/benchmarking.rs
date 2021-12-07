@@ -820,7 +820,7 @@ mod tests {
                     n,
                     <Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
                     false,
-                    RewardDestination::Stash,
+                    RewardDestination::Staked,
                 )
                 .unwrap();
 
