@@ -612,10 +612,6 @@ impl<T: Config> Module<T> {
         // fetch source twin
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
 
-        // Burn 35%
-        let burned_amount = Perbill::from_percent(35) * amount;
-        <T as Config>::Currency::slash(&twin.account_id, burned_amount);
-
         // Send 10% to the foundation
         let foundation_share = Perbill::from_percent(10) * amount;
         debug::info!(
@@ -631,7 +627,7 @@ impl<T: Config> Module<T> {
             KeepAlive,
         )
         .map_err(|_| DispatchError::Other("Can't make foundation share transfer"))?;
-        
+
         // TODO: send 5% to the staking pool account
         let staking_pool_share = Perbill::from_percent(5) * amount;
         let staking_pool_account = T::StakingPoolAccount::get();
@@ -658,6 +654,10 @@ impl<T: Config> Module<T> {
             KeepAlive,
         )
         .map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
+
+        // Burn 35%, to not have any imbalance in the system, subtract all previously send amounts with the initial
+        let amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
+        <T as Config>::Currency::slash(&twin.account_id, amount_to_burn);
 
         Ok(())
     }
