@@ -3,10 +3,11 @@
 use super::*;
 use crate as pallet_smart_contract;
 use frame_support::{construct_runtime, parameter_types};
-use sp_core::{sr25519, Pair, Public, H256};
+use sp_core::{sr25519, Pair, Public, H256, crypto::Ss58Codec};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::MultiSignature;
 use sp_runtime::{
+    AccountId32,
     testing::{Header, TestXt},
     traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup},
 };
@@ -164,8 +165,6 @@ pub fn eve() -> AccountId {
 }
 
 pub fn get_staking_pool_account() -> AccountId {
-    use sp_core::crypto::Ss58Codec;
-    use sp_runtime::AccountId32;
     AccountId32::from_ss58check("5CNposRewardAccount11111111111111111111111111FSU").unwrap()
 }
 
