@@ -498,6 +498,10 @@ fn test_node_contract_billing() {
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
         assert_eq!(contract_billing_info.amount_unbilled, 180001); //this amount in unit USD = 1/1e7
 
+        let total_issuance = Balances::total_issuance();
+        assert_eq!(total_issuance, 1002500000000);
+
+
         // let mature 10 blocks
         // because we bill every 10 blocks
         run_to_block(602);
@@ -534,7 +538,23 @@ fn test_node_contract_billing() {
         
         let staking_pool_account_balance = Balances::free_balance(&get_staking_pool_account());
         let staking_pool_account_balance_as_u128: u128 = staking_pool_account_balance.saturated_into::<u128>();
+        // equal to 5%
         assert_eq!(staking_pool_account_balance_as_u128, 229987);
+
+        let pricing_policy = TfgridModule::pricing_policies(1);
+        let foundation_account_balance = Balances::free_balance(&pricing_policy.foundation_account);
+        let foundation_account_balance_as_u128: u128 = foundation_account_balance.saturated_into::<u128>();
+        // equal to 10%
+        assert_eq!(foundation_account_balance_as_u128, 459974);
+
+        let sales_account_balance = Balances::free_balance(&pricing_policy.certified_sales_account);
+        let sales_account_balance_as_u128: u128 = sales_account_balance.saturated_into::<u128>();
+        // equal to 50%
+        assert_eq!(sales_account_balance_as_u128, 2299869);
+
+        let total_issuance = Balances::total_issuance();
+        // total issueance is now previous total - amount burned from contract billed (35%)
+        assert_eq!(total_issuance, 1002500000000 - 1609909);
 
         // amount unbilled should have been reset after a transfer between contract owner and farmer
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
