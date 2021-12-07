@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, RawEvent};
-use substrate_fixed::types::{U16F16, U64F64};
+use substrate_fixed::types::{U16F16};
 use frame_support::{
     assert_noop, assert_ok,
     traits::{OnFinalize, OnInitialize},
@@ -267,32 +267,39 @@ fn test_cancel_contract_works() {
 
 #[test]
 fn test_cancel_name_contract_works() {
-	new_test_ext().execute_with(|| {
-		prepare_farm_and_node();
+    new_test_ext().execute_with(|| {
+        prepare_farm_and_node();
 
-		assert_ok!(SmartContractModule::create_name_contract(Origin::signed(alice()), "some_name".as_bytes().to_vec()));
+        assert_ok!(SmartContractModule::create_name_contract(
+            Origin::signed(alice()),
+            "some_name".as_bytes().to_vec()
+        ));
 
-		assert_ok!(SmartContractModule::cancel_contract(Origin::signed(alice()), 1));
+        assert_ok!(SmartContractModule::cancel_contract(
+            Origin::signed(alice()),
+            1
+        ));
 
-		let name_contract = types::NameContract {
-			name: "some_name".as_bytes().to_vec(),
-		};
-		let contract_type = types::ContractData::NameContract(name_contract);
+        let name_contract = types::NameContract {
+            name: "some_name".as_bytes().to_vec(),
+        };
+        let contract_type = types::ContractData::NameContract(name_contract);
 
-		let expected_contract_value = types::Contract {
-			contract_id: 1,
-			state: types::ContractState::Deleted,
-			twin_id: 1,
-			version: 1,
-			contract_type
-		};
+        let expected_contract_value = types::Contract {
+            contract_id: 1,
+            state: types::ContractState::Deleted,
+            twin_id: 1,
+            version: 1,
+            contract_type,
+        };
 
-		let name_contract = SmartContractModule::contracts(1);
-		assert_eq!(name_contract, expected_contract_value);
+        let name_contract = SmartContractModule::contracts(1);
+        assert_eq!(name_contract, expected_contract_value);
 
-		let contract_id = SmartContractModule::contract_id_by_name_registration("some_name".as_bytes().to_vec());
-		assert_eq!(contract_id, 0);
-	});
+        let contract_id =
+            SmartContractModule::contract_id_by_name_registration("some_name".as_bytes().to_vec());
+        assert_eq!(contract_id, 0);
+    });
 }
 
 #[test]
@@ -491,6 +498,10 @@ fn test_node_contract_billing() {
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
         assert_eq!(contract_billing_info.amount_unbilled, 180001); //this amount in unit USD = 1/1e7
 
+        let total_issuance = Balances::total_issuance();
+        assert_eq!(total_issuance, 1002500000000);
+
+
         // let mature 10 blocks
         // because we bill every 10 blocks
         run_to_block(602);
@@ -517,25 +528,33 @@ fn test_node_contract_billing() {
 
         assert_eq!(our_events[2], expected_events[0]);
 
-        // check the farmer twins account and see if it got balanced debited
-        let twin = TfgridModule::twins(1);
-        let b = Balances::free_balance(&twin.account_id);
-        let balances_as_u128: u128 = b.saturated_into::<u128>();
-        // farmer gets 70% of cultivation rewards if he deploys on his own node
-        let amount = U64F64::from_num(4599739) * U64F64::from_num(0.7);
-        let amount_added_to_farmer_balance = amount.ceil().to_num::<u128>();
-        let farmer_balance_should_be = 1000000000000 + amount_added_to_farmer_balance;
-        assert_eq!(balances_as_u128, farmer_balance_should_be);
-
         // check the contract owners address to see if it got balance credited
         let twin = TfgridModule::twins(2);
         let b = Balances::free_balance(&twin.account_id);
         let balances_as_u128: u128 = b.saturated_into::<u128>();
 
-        // TODO figure out why there is 1 unit in diffrence here!!
-        let twin2_balance_should_be = 2500000000 - 4599740 as u128;
-
+        let twin2_balance_should_be = 2500000000 - 4599739 as u128;
         assert_eq!(balances_as_u128, twin2_balance_should_be);
+        
+        let staking_pool_account_balance = Balances::free_balance(&get_staking_pool_account());
+        let staking_pool_account_balance_as_u128: u128 = staking_pool_account_balance.saturated_into::<u128>();
+        // equal to 5%
+        assert_eq!(staking_pool_account_balance_as_u128, 229987);
+
+        let pricing_policy = TfgridModule::pricing_policies(1);
+        let foundation_account_balance = Balances::free_balance(&pricing_policy.foundation_account);
+        let foundation_account_balance_as_u128: u128 = foundation_account_balance.saturated_into::<u128>();
+        // equal to 10%
+        assert_eq!(foundation_account_balance_as_u128, 459974);
+
+        let sales_account_balance = Balances::free_balance(&pricing_policy.certified_sales_account);
+        let sales_account_balance_as_u128: u128 = sales_account_balance.saturated_into::<u128>();
+        // equal to 50%
+        assert_eq!(sales_account_balance_as_u128, 2299869);
+
+        let total_issuance = Balances::total_issuance();
+        // total issueance is now previous total - amount burned from contract billed (35%)
+        assert_eq!(total_issuance, 1002500000000 - 1609909);
 
         // amount unbilled should have been reset after a transfer between contract owner and farmer
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);

@@ -3,12 +3,13 @@
 use super::*;
 use crate as pallet_smart_contract;
 use frame_support::{construct_runtime, parameter_types};
-use sp_core::{sr25519, Pair, Public, H256};
+use sp_core::{sr25519, Pair, Public, H256, crypto::Ss58Codec};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::MultiSignature;
 use sp_runtime::{
+    AccountId32,
     testing::{Header, TestXt},
-	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup},
+    traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup},
 };
 use sp_std::prelude::*;
 
@@ -32,7 +33,7 @@ construct_runtime!(
         TfgridModule: pallet_tfgrid::{Module, Call, Storage, Event<T>},
         Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
         SmartContractModule: pallet_smart_contract::{Module, Call, Event<T>},
-        TFTPriceModule: pallet_tft_price::{Module, Call, Storage, Event<T>},
+        TFTPriceModule: pallet_tft_price::{Module, Call, Storage, Event<T>}
     }
 );
 
@@ -41,6 +42,7 @@ parameter_types! {
     pub BlockWeights: frame_system::limits::BlockWeights =
         frame_system::limits::BlockWeights::simple_max(1024);
     pub const ExistentialDeposit: u64 = 1;
+    pub StakingPoolAccount: AccountId = get_staking_pool_account();
 }
 
 impl frame_system::Config for TestRuntime {
@@ -85,8 +87,8 @@ impl pallet_tfgrid::Config for TestRuntime {
 
 impl pallet_tft_price::Config for TestRuntime {
     type Event = Event;
-	type AuthorityId = pallet_tft_price::crypto::AuthId;
-	type Call = Call;
+    type AuthorityId = pallet_tft_price::crypto::AuthId;
+    type Call = Call;
 }
 
 impl pallet_timestamp::Config for TestRuntime {
@@ -99,6 +101,7 @@ impl pallet_timestamp::Config for TestRuntime {
 impl Config for TestRuntime {
     type Event = Event;
     type Currency = Balances;
+    type StakingPoolAccount = StakingPoolAccount;
 }
 
 type AccountPublic = <MultiSignature as Verify>::Signer;
@@ -111,30 +114,30 @@ fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public
 }
 
 impl frame_system::offchain::SigningTypes for TestRuntime {
-	type Public = <Signature as Verify>::Signer;
-	type Signature = Signature;
+    type Public = <Signature as Verify>::Signer;
+    type Signature = Signature;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for TestRuntime
 where
-	Call: From<C>,
+    Call: From<C>,
 {
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
+    type OverarchingCall = Call;
+    type Extrinsic = Extrinsic;
 }
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for TestRuntime
 where
-	Call: From<LocalCall>,
+    Call: From<LocalCall>,
 {
-	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-		call: Call,
-		_public: <Signature as Verify>::Signer,
-		_account: AccountId,
-		nonce: u64,
-	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-		Some((call, (nonce, ())))
-	}
+    fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+        call: Call,
+        _public: <Signature as Verify>::Signer,
+        _account: AccountId,
+        nonce: u64,
+    ) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+        Some((call, (nonce, ())))
+    }
 }
 
 /// Helper function to generate an account ID from seed
@@ -159,6 +162,10 @@ pub fn ferdie() -> AccountId {
 
 pub fn eve() -> AccountId {
     get_account_id_from_seed::<sr25519::Public>("Eve")
+}
+
+pub fn get_staking_pool_account() -> AccountId {
+    AccountId32::from_ss58check("5CNposRewardAccount11111111111111111111111111FSU").unwrap()
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

@@ -1,19 +1,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
 
+use codec::Encode;
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// https://substrate.dev/docs/en/knowledgebase/runtime/frame
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, dispatch, ensure, traits::Get, debug,
+    debug, decl_error, decl_event, decl_module, decl_storage, dispatch, ensure,
+    traits::Get,
     traits::{Currency, ExistenceRequirement::KeepAlive},
 };
-use sp_runtime::{traits::SaturatedConversion};
-use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
+use frame_system::{self as system, ensure_root, ensure_signed, RawOrigin};
 use hex::FromHex;
-use codec::Encode;
-use sp_std::prelude::*;
 use pallet_timestamp as timestamp;
+use sp_runtime::traits::SaturatedConversion;
+use sp_std::prelude::*;
 
 #[cfg(test)]
 mod tests;
@@ -26,7 +27,7 @@ pub mod types;
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
 
-pub trait Config: system::Config + timestamp::Config  {
+pub trait Config: system::Config + timestamp::Config {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
     type Currency: Currency<Self::AccountId>;
 }
@@ -39,7 +40,6 @@ pub const TFGRID_NODE_VERSION: u32 = 2;
 pub const TFGRID_PRICING_POLICY_VERSION: u32 = 1;
 pub const TFGRID_CERTIFICATION_CODE_VERSION: u32 = 1;
 pub const TFGRID_FARMING_POLICY_VERSION: u32 = 1;
-
 
 decl_storage! {
     trait Store for Module<T: Config> as TfgridModule {
@@ -76,7 +76,7 @@ decl_storage! {
         FarmingPolicyID: u32;
 
         /// The current version of the pallet.
-		PalletVersion: types::StorageVersion = types::StorageVersion::V1Struct;
+        PalletVersion: types::StorageVersion = types::StorageVersion::V1Struct;
     }
 
     add_extra_genesis {
@@ -334,7 +334,7 @@ decl_module! {
             FarmIdByName::insert(name, stored_farm.id);
 
             Self::deposit_event(RawEvent::FarmUpdated(stored_farm));
-            
+
             Ok(())
         }
 
@@ -349,7 +349,7 @@ decl_module! {
             let farm = Farms::get(farm_id);
 
             ensure!(farm.twin_id == twin_id, Error::<T>::CannotUpdateFarmWrongTwin);
-            
+
             FarmPayoutV2AddressByFarmID::insert(&farm_id, &stellar_address);
 
             Self::deposit_event(RawEvent::FarmPayoutV2AddressRegistered(farm_id, stellar_address));
@@ -469,7 +469,7 @@ decl_module! {
             let farming_policies = FarmingPolicyIDsByCertificationType::get(farm.certification_type);
             let mut farming_policy_id = 0;
             if farming_policies.len() > 0 {
-                farming_policy_id = farming_policies[farming_policies.len() -1]; 
+                farming_policy_id = farming_policies[farming_policies.len() -1];
             }
 
             let created = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
@@ -496,7 +496,7 @@ decl_module! {
             Self::deposit_event(RawEvent::NodeStored(new_node));
 
             Ok(())
-        } 
+        }
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn update_node(origin, node_id: u32, farm_id: u32, resources: types::Resources, location: types::Location, country: Vec<u8>, city: Vec<u8>, interfaces: Vec<types::Interface>) -> dispatch::DispatchResult {
@@ -504,13 +504,13 @@ decl_module! {
 
             ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
             ensure!(TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
-            
+
             let twin_id = TwinIdByAccountID::<T>::get(&account_id);
             let node = Nodes::get(&node_id);
             ensure!(node.twin_id == twin_id, Error::<T>::NodeUpdateNotAuthorized);
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
-            
+
             let mut stored_node = Nodes::get(node_id);
 
             stored_node.farm_id = farm_id;
@@ -619,7 +619,7 @@ decl_module! {
 
             ensure!(sp_io::crypto::ed25519_verify(&ed25519_signature, &message, &entity_pubkey_ed25519), Error::<T>::EntitySignatureDoesNotMatch);
 
-			let mut id = EntityID::get();
+            let mut id = EntityID::get();
             id = id+1;
 
             let entity = types::Entity::<T::AccountId> {
@@ -657,7 +657,7 @@ decl_module! {
 
             // remove entity by name id
             EntityIdByName::remove(&stored_entity.name);
-            
+
             stored_entity.name = name.clone();
             stored_entity.country = country;
             stored_entity.city = city;
@@ -709,29 +709,29 @@ decl_module! {
             let mut twin_id = TwinID::get();
             twin_id = twin_id+1;
 
-			let twin = types::Twin::<T::AccountId> {
+            let twin = types::Twin::<T::AccountId> {
                 version: TFGRID_TWIN_VERSION,
-				id: twin_id,
-				account_id: account_id.clone(),
+                id: twin_id,
+                account_id: account_id.clone(),
                 entities: Vec::new(),
                 ip: ip.clone(),
-			};
+            };
 
             Twins::<T>::insert(&twin_id, &twin);
             TwinID::put(twin_id);
 
             // add the twin id to this users map of twin ids
-			TwinIdByAccountID::<T>::insert(&account_id.clone(), twin_id);
+            TwinIdByAccountID::<T>::insert(&account_id.clone(), twin_id);
 
-			Self::deposit_event(RawEvent::TwinStored(twin));
-			
-			Ok(())
+            Self::deposit_event(RawEvent::TwinStored(twin));
+
+            Ok(())
         }
-        
+
         #[weight = 10 + T::DbWeight::get().writes(1)]
-		pub fn update_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
+        pub fn update_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
-            
+
             ensure!(TwinIdByAccountID::<T>::contains_key(account_id.clone()), Error::<T>::TwinNotExists);
             let twin_id = TwinIdByAccountID::<T>::get(account_id.clone());
             let mut twin = Twins::<T>::get(&twin_id);
@@ -745,7 +745,7 @@ decl_module! {
 
             Self::deposit_event(RawEvent::TwinUpdated(twin));
             Ok(())
-		}
+        }
 
         // Method for twins only
         #[weight = 10 + T::DbWeight::get().writes(1)]
@@ -894,7 +894,7 @@ decl_module! {
             certified_sales_account: T::AccountId
         ) -> dispatch::DispatchResult {
             let _ = ensure_root(origin)?;
-            
+
             // Ensure pricing policy with same id already exists
             ensure!(PricingPolicies::<T>::contains_key(&id), Error::<T>::PricingPolicyNotExists);
 
@@ -977,7 +977,7 @@ decl_module! {
                 certification_type,
             };
 
-            
+
             // We don't want to add duplicate farming_policies, so we check whether it exists, if so return error
             match farming_policies.binary_search(&new_policy) {
                 Ok(_) => Err(Error::<T>::FarmingPolicyAlreadyExists.into()),
@@ -1014,34 +1014,45 @@ impl<T: Config> Module<T> {
 
     pub fn fund_node_wallet(node_id: u32) {
         if !Nodes::contains_key(&node_id) {
-            return
+            return;
         }
-        
+
         let node = Nodes::get(node_id);
         if !Farms::contains_key(node.farm_id) {
-            return
+            return;
         }
         let farm = Farms::get(node.farm_id);
 
         let node_twin = Twins::<T>::get(node.twin_id);
         let farm_twin = Twins::<T>::get(farm.twin_id);
-        
+
         let node_twin_balance: BalanceOf<T> = T::Currency::free_balance(&node_twin.account_id);
         let minimal_balance = BalanceOf::<T>::saturated_from(200000 as u128);
 
         if node_twin_balance <= minimal_balance {
-            let farmer_twin_balance: BalanceOf<T> = T::Currency::free_balance(&farm_twin.account_id);
+            let farmer_twin_balance: BalanceOf<T> =
+                T::Currency::free_balance(&farm_twin.account_id);
             let balance_to_transfer = BalanceOf::<T>::saturated_from(10000000 as u128);
 
             if farmer_twin_balance <= balance_to_transfer {
-				debug::info!("farmer does not have enough balance to transfer");
-                return
+                debug::info!("farmer does not have enough balance to transfer");
+                return;
             }
 
-            debug::info!("Transfering: {:?} from farmer twin {:?} to node twin {:?}", &balance_to_transfer, &farm_twin.account_id, &node_twin.account_id);
-            if let Err(_) = T::Currency::transfer(&farm_twin.account_id, &node_twin.account_id, balance_to_transfer, KeepAlive) {
+            debug::info!(
+                "Transfering: {:?} from farmer twin {:?} to node twin {:?}",
+                &balance_to_transfer,
+                &farm_twin.account_id,
+                &node_twin.account_id
+            );
+            if let Err(_) = T::Currency::transfer(
+                &farm_twin.account_id,
+                &node_twin.account_id,
+                balance_to_transfer,
+                KeepAlive,
+            ) {
                 debug::error!("Can't make transfer from farmer twin to node twin");
-            };            
+            };
         }
     }
 }
