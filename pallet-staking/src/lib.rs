@@ -1088,6 +1088,8 @@ decl_storage! {
         /// The account from which the payouts for the npos are taken
         pub StakingPoolAccount get(fn staking_pool_account): T::AccountId;
 
+        // Intermediate account where the staking rewards are sent to when they are ready to be claimed.
+        pub StakingRewardAccount get(fn staking_reward_account): T::AccountId;
         /// The beneficiary account for slashes
         pub SlashingBeneficiary get(fn slashing_beneficiary): T::AccountId;
 
@@ -1102,9 +1104,12 @@ decl_storage! {
             Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
         config(staking_pool_account): T::AccountId;
         config(slashing_beneficiary): T::AccountId;
+        config(staking_reward_account): T::AccountId;
         build(|config: &GenesisConfig<T>| {
             StakingPoolAccount::<T>::set(config.staking_pool_account.clone());
             SlashingBeneficiary::<T>::set(config.slashing_beneficiary.clone());
+            StakingRewardAccount::<T>::set(config.staking_reward_account.clone());
+
             for &(ref stash, ref controller, balance, ref status) in &config.stakers {
                 assert!(
                     T::Currency::free_balance(&stash) >= balance,
@@ -2469,12 +2474,12 @@ impl<T: Config> Module<T> {
     /// Actually make a payment to a staker. This uses the currency's reward function
     /// to pay the right payee for the given staker account.
     fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> result::Result<(), ()> {
-        let staking_pool_account = StakingPoolAccount::<T>::get();
+        let staking_reward_account = StakingRewardAccount::<T>::get();
         let imbalance = T::Currency::withdraw(
-            &staking_pool_account,
+            &staking_reward_account,
             amount,
             WithdrawReasons::all(),
-            ExistenceRequirement::KeepAlive,
+            ExistenceRequirement::AllowDeath,
         )
         .map_err(|_| ())?;
         match Self::payee(stash) {
@@ -2857,15 +2862,27 @@ impl<T: Config> Module<T> {
             // use %1 of the balance as payout
             let balance: BalanceOf<T> =
                 <T as Config>::Currency::free_balance(&staking_pool_account);
-            let balance_u128: u128 = balance.saturated_into::<u128>();
-
-            let payout_as_u128 = balance_u128 / 100;
-            let payout: BalanceOf<T> = BalanceOf::<T>::saturated_from(payout_as_u128);
-
+            let payout = Perbill::from_percent(1) * balance;
             Self::deposit_event(RawEvent::EraPayout(active_era.index, payout, Zero::zero()));
-
             // Set ending era reward.
             <ErasValidatorReward<T>>::insert(&active_era.index, payout);
+
+            let staking_reward_account = StakingRewardAccount::<T>::get();
+            match T::Currency::transfer(
+                &staking_pool_account,
+                &staking_reward_account,
+                payout,
+                ExistenceRequirement::AllowDeath,
+            ) {
+                Ok(_) => return,
+                Err(err) => {
+                    log!(
+                        error,
+                        "💸 Error transfering era reward to staking reward account : {:?}",
+                        err
+                    );
+                }
+            };
         }
     }
 
