@@ -118,7 +118,7 @@ pub fn create_validator_with_nominators<T: Config>(
     <ErasValidatorReward<T>>::insert(current_era, total_payout);
 
     // Initialize the staking reward account with some balance
-    let staking_reward_account = <StakingRewardAccount<T>>::get();
+    let staking_reward_account = T::StakingRewardAccount::get();
     T::Currency::make_free_balance_be(&staking_reward_account, total_payout);
 
     Ok((v_stash, nominators))

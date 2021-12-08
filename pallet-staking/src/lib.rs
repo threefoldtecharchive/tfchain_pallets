@@ -866,6 +866,11 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 
     /// Weight information for extrinsics in this pallet.
     type WeightInfo: WeightInfo;
+
+    // Staking pool account configuration
+    type StakingPoolAccount: Get<Self::AccountId>;
+    // Intermediate account where the staking rewards are sent to when they are ready to be claimed.
+    type StakingRewardAccount: Get<Self::AccountId>;
 }
 
 /// Mode of era-forcing.
@@ -1085,11 +1090,7 @@ decl_storage! {
         /// True if the current **planned** session is final. Note that this does not take era
         /// forcing into account.
         pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
-        /// The account from which the payouts for the npos are taken
-        pub StakingPoolAccount get(fn staking_pool_account): T::AccountId;
 
-        // Intermediate account where the staking rewards are sent to when they are ready to be claimed.
-        pub StakingRewardAccount get(fn staking_reward_account): T::AccountId;
         /// The beneficiary account for slashes
         pub SlashingBeneficiary get(fn slashing_beneficiary): T::AccountId;
 
@@ -1102,14 +1103,9 @@ decl_storage! {
     add_extra_genesis {
         config(stakers):
             Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
-        config(staking_pool_account): T::AccountId;
         config(slashing_beneficiary): T::AccountId;
-        config(staking_reward_account): T::AccountId;
         build(|config: &GenesisConfig<T>| {
-            StakingPoolAccount::<T>::set(config.staking_pool_account.clone());
             SlashingBeneficiary::<T>::set(config.slashing_beneficiary.clone());
-            StakingRewardAccount::<T>::set(config.staking_reward_account.clone());
-
             for &(ref stash, ref controller, balance, ref status) in &config.stakers {
                 assert!(
                     T::Currency::free_balance(&stash) >= balance,
@@ -2275,7 +2271,6 @@ decl_module! {
 
             Ok(())
         }
-
     }
 }
 
@@ -2474,7 +2469,7 @@ impl<T: Config> Module<T> {
     /// Actually make a payment to a staker. This uses the currency's reward function
     /// to pay the right payee for the given staker account.
     fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> result::Result<(), ()> {
-        let staking_reward_account = StakingRewardAccount::<T>::get();
+        let staking_reward_account = T::StakingRewardAccount::get();
         let imbalance = T::Currency::withdraw(
             &staking_reward_account,
             amount,
@@ -2856,7 +2851,7 @@ impl<T: Config> Module<T> {
     fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
         // Note: active_era_start can be None if end era is called during genesis config.
         if let Some(_active_era_start) = active_era.start {
-            let staking_pool_account = StakingPoolAccount::<T>::get();
+            let staking_pool_account = T::StakingPoolAccount::get();
 
             // get balance of staking pool account
             // use %1 of the balance as payout
@@ -2867,7 +2862,7 @@ impl<T: Config> Module<T> {
             // Set ending era reward.
             <ErasValidatorReward<T>>::insert(&active_era.index, payout);
 
-            let staking_reward_account = StakingRewardAccount::<T>::get();
+            let staking_reward_account = T::StakingRewardAccount::get();
             match T::Currency::transfer(
                 &staking_pool_account,
                 &staking_reward_account,

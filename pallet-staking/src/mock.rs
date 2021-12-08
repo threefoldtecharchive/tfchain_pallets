@@ -215,6 +215,8 @@ parameter_types! {
     pub const UnsignedPriority: u64 = 1 << 20;
     pub const MinSolutionScoreBump: Perbill = Perbill::zero();
     pub OffchainSolutionWeightLimit: Weight = BlockWeights::get().max_block;
+    pub StakingPoolAccount: AccountId = get_staking_pool_account();
+    pub StakingRewardAccount: AccountId = 1001;
 }
 
 thread_local! {
@@ -253,6 +255,8 @@ impl Config for Test {
     type UnsignedPriority = UnsignedPriority;
     type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
     type WeightInfo = ();
+    type StakingPoolAccount = StakingPoolAccount;
+    type StakingRewardAccount = StakingRewardAccount;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -450,8 +454,6 @@ impl ExtBuilder {
             minimum_validator_count: self.minimum_validator_count,
             invulnerables: self.invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
-            staking_pool_account: 1000,
-            staking_reward_account: 1001,
             ..Default::default()
         }
         .assimilate_storage(&mut storage);
@@ -685,7 +687,7 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
 use sp_runtime::traits::SaturatedConversion;
 
 pub(crate) fn current_total_payout_for_duration(_duration: u64) -> Balance {
-    let staking_pool_account = <StakingPoolAccount<Test>>::get();
+    let staking_pool_account = get_staking_pool_account();
 
     // get balance of staking pool account
     // use %1 of the balance as payout
@@ -699,7 +701,7 @@ pub(crate) fn current_total_payout_for_duration(_duration: u64) -> Balance {
 }
 
 pub(crate) fn maximum_payout_for_duration(_duration: u64) -> Balance {
-    let staking_pool_account = <StakingPoolAccount<Test>>::get();
+    let staking_pool_account = get_staking_pool_account();
 
     // get balance of staking pool account
     // use %1 of the balance as payout
@@ -1061,4 +1063,8 @@ pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
     (Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+pub fn get_staking_pool_account() -> AccountId {
+    1000
 }
