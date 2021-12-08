@@ -871,8 +871,6 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
     type StakingPoolAccount: Get<Self::AccountId>;
     // Intermediate account where the staking rewards are sent to when they are ready to be claimed.
     type StakingRewardAccount: Get<Self::AccountId>;
-    // The beneficiary account for slashes
-    type SlashingBeneficiary: Get<Self::AccountId>;
 }
 
 /// Mode of era-forcing.
@@ -1093,6 +1091,9 @@ decl_storage! {
         /// forcing into account.
         pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
+        /// The beneficiary account for slashes
+        pub SlashingBeneficiary get(fn slashing_beneficiary): T::AccountId;
+
         /// True if network has been upgraded to this version.
         /// Storage version of the pallet.
         ///
@@ -1102,7 +1103,9 @@ decl_storage! {
     add_extra_genesis {
         config(stakers):
             Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
+        config(slashing_beneficiary): T::AccountId;
         build(|config: &GenesisConfig<T>| {
+            SlashingBeneficiary::<T>::set(config.slashing_beneficiary.clone());
             for &(ref stash, ref controller, balance, ref status) in &config.stakers {
                 assert!(
                     T::Currency::free_balance(&stash) >= balance,
@@ -2260,6 +2263,14 @@ decl_module! {
             Ok(())
         }
 
+        #[weight = T::WeightInfo::set_slashing_beneficiary()]
+        pub fn set_slashing_beneficiary(origin, target: T::AccountId) -> DispatchResult {
+            ensure_root(origin)?;
+
+            SlashingBeneficiary::<T>::set(target);
+
+            Ok(())
+        }
     }
 }
 

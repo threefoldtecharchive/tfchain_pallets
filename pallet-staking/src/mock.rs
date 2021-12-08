@@ -217,7 +217,6 @@ parameter_types! {
     pub OffchainSolutionWeightLimit: Weight = BlockWeights::get().max_block;
     pub StakingPoolAccount: AccountId = get_staking_pool_account();
     pub StakingRewardAccount: AccountId = 1001;
-    pub SlashingBeneficiary: AccountId = 1002;
 }
 
 thread_local! {
@@ -258,7 +257,6 @@ impl Config for Test {
     type WeightInfo = ();
     type StakingPoolAccount = StakingPoolAccount;
     type StakingRewardAccount = StakingRewardAccount;
-    type SlashingBeneficiary = SlashingBeneficiary;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
