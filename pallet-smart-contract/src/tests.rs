@@ -169,7 +169,7 @@ fn test_update_contract_works() {
         let node_contract = SmartContractModule::contracts(1);
         assert_eq!(node_contract, expected_contract_value);
 
-        let contracts = SmartContractModule::node_contracts(1);
+        let contracts = SmartContractModule::active_node_contracts(1);
         assert_eq!(contracts.len(), 1);
 
         assert_eq!(contracts[0], 1);
@@ -260,7 +260,7 @@ fn test_cancel_contract_works() {
         let node_contract = SmartContractModule::contracts(1);
         assert_eq!(node_contract, expected_contract_value);
 
-        let contracts = SmartContractModule::node_contracts(1);
+        let contracts = SmartContractModule::active_node_contracts(1);
         assert_eq!(contracts.len(), 0);
     });
 }
@@ -331,7 +331,7 @@ fn test_create_multiple_contracts_work() {
             0
         ));
 
-        let node_contracts = SmartContractModule::node_contracts(1);
+        let node_contracts = SmartContractModule::active_node_contracts(1);
         assert_eq!(node_contracts.len(), 3);
 
         // now cancel 1 and check if the storage maps are updated correctly
@@ -340,7 +340,7 @@ fn test_create_multiple_contracts_work() {
             1
         ));
 
-        let node_contracts = SmartContractModule::node_contracts(1);
+        let node_contracts = SmartContractModule::active_node_contracts(1);
         assert_eq!(node_contracts.len(), 2);
     });
 }

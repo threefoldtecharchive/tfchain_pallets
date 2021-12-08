@@ -19,6 +19,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod migrations;
+
 pub mod types;
 
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
@@ -83,7 +85,10 @@ decl_storage! {
         // ContractIDByNodeIDAndHash is a mapping for a contract ID by supplying a node_id and a deployment_hash
         // this combination makes a deployment for a user / node unique
         pub ContractIDByNodeIDAndHash get(fn node_contract_by_hash): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) Vec<u8> => u64;
-        pub ActiveNodeContracts get(fn node_contracts): map hasher(blake2_128_concat) u32 => Vec<u64>;
+        
+        // TODO remove node contracts after we did a successfull migration
+        pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) types::ContractState => Vec<types::Contract>;
+        pub ActiveNodeContracts get(fn active_node_contracts): map hasher(blake2_128_concat) u32 => Vec<u64>;
         pub ContractsToBillAt get(fn contract_to_bill_at_block): map hasher(blake2_128_concat) u64 => Vec<u64>;
         pub ContractIDByNameRegistration get(fn contract_id_by_name_registration): map hasher(blake2_128_concat) Vec<u8> => u64;
 
@@ -95,6 +100,10 @@ decl_storage! {
 decl_module! {
     pub struct Module<T: Config> for enum Call where origin: T::Origin {
         fn deposit_event() = default;
+
+        fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			migrations::migrate_node_contracts::<T>()
+		}
 
         #[weight = 10]
         fn create_node_contract(origin, node_id: u32, data: Vec<u8>, deployment_hash: Vec<u8>, public_ips: u32){
