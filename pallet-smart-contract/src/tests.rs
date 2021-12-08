@@ -169,11 +169,6 @@ fn test_update_contract_works() {
         let node_contract = SmartContractModule::contracts(1);
         assert_eq!(node_contract, expected_contract_value);
 
-        let contracts = SmartContractModule::node_contracts(1, types::ContractState::Created);
-        assert_eq!(contracts.len(), 1);
-
-        assert_eq!(contracts[0], expected_contract_value);
-
         let node_contract_id_by_hash =
             SmartContractModule::node_contract_by_hash(1, "some_other_hash".as_bytes().to_vec());
         assert_eq!(node_contract_id_by_hash, 1);
@@ -260,8 +255,55 @@ fn test_cancel_contract_works() {
         let node_contract = SmartContractModule::contracts(1);
         assert_eq!(node_contract, expected_contract_value);
 
-        let contracts = SmartContractModule::node_contracts(1, types::ContractState::Created);
-        assert_eq!(contracts.len(), 0);
+        // let contracts = SmartContractModule::node_contracts(1, types::ContractState::Created);
+        // assert_eq!(contracts.len(), 0);
+    });
+}
+
+#[test]
+fn test_create_multiple_contracts_work() {
+    new_test_ext().execute_with(|| {
+        prepare_farm_and_node();
+
+        assert_ok!(SmartContractModule::create_node_contract(
+            Origin::signed(alice()),
+            1,
+            "some_data".as_bytes().to_vec(),
+            "hash1".as_bytes().to_vec(),
+            0
+        ));
+
+        assert_ok!(SmartContractModule::create_node_contract(
+            Origin::signed(alice()),
+            1,
+            "some_data2".as_bytes().to_vec(),
+            "hash2".as_bytes().to_vec(),
+            0
+        ));
+
+        assert_ok!(SmartContractModule::create_node_contract(
+            Origin::signed(alice()),
+            1,
+            "some_data3".as_bytes().to_vec(),
+            "hash3".as_bytes().to_vec(),
+            0
+        ));
+
+        let contract_1 = SmartContractModule::contracts(1);
+        assert_eq!(contract_1.state, types::ContractState::Created);
+        let contract_2 = SmartContractModule::contracts(2);
+        assert_eq!(contract_2.state, types::ContractState::Created);
+        let contract_3 = SmartContractModule::contracts(3);
+        assert_eq!(contract_3.state, types::ContractState::Created);
+
+        // now cancel 1 and check if the storage maps are updated correctly
+        assert_ok!(SmartContractModule::cancel_contract(
+            Origin::signed(alice()),
+            1
+        ));
+
+        let contract_1 = SmartContractModule::contracts(1);
+        assert_eq!(contract_1.state, types::ContractState::Deleted);
     });
 }
 

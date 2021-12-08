@@ -83,7 +83,6 @@ decl_storage! {
         // ContractIDByNodeIDAndHash is a mapping for a contract ID by supplying a node_id and a deployment_hash
         // this combination makes a deployment for a user / node unique
         pub ContractIDByNodeIDAndHash get(fn node_contract_by_hash): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) Vec<u8> => u64;
-        pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) types::ContractState => Vec<types::Contract>;
         pub ContractsToBillAt get(fn contract_to_bill_at_block): map hasher(blake2_128_concat) u64 => Vec<u64>;
         pub ContractIDByNameRegistration get(fn contract_id_by_name_registration): map hasher(blake2_128_concat) Vec<u8> => u64;
 
@@ -190,10 +189,6 @@ impl<T: Config> Module<T> {
 
         ContractIDByNodeIDAndHash::insert(node_id, deployment_hash, id);
 
-        let mut node_contracts = NodeContracts::get(&node_contract.node_id, &contract.state);
-        node_contracts.push(contract.clone());
-        NodeContracts::insert(&node_contract.node_id, &contract.state, &node_contracts);
-
         Self::deposit_event(RawEvent::ContractCreated(contract));
 
         Ok(())
@@ -264,8 +259,7 @@ impl<T: Config> Module<T> {
         // override values
         contract.contract_type = types::ContractData::NodeContract(node_contract);
 
-        let state = contract.state.clone();
-        Self::_update_contract_state(&mut contract, &state)?;
+        Contracts::insert(contract_id, &contract);
 
         Self::deposit_event(RawEvent::ContractUpdated(contract));
 
@@ -308,7 +302,8 @@ impl<T: Config> Module<T> {
             }
         };
 
-        Self::_update_contract_state(&mut contract, &types::ContractState::Deleted)?;
+        contract.state = types::ContractState::Deleted;
+        Contracts::insert(contract_id, &contract);
 
         Ok(())
     }
@@ -542,7 +537,8 @@ impl<T: Config> Module<T> {
             if node_contract.public_ips > 0 {
                 Self::_free_ip(contract.contract_id, &mut node_contract)?;
             }
-            Self::_update_contract_state(contract, &types::ContractState::OutOfFunds)?;
+            contract.state = types::ContractState::OutOfFunds;
+            Contracts::insert(contract.contract_id, contract);
             return Ok(());
         }
 
@@ -596,7 +592,8 @@ impl<T: Config> Module<T> {
 
         // If total balance exceeds the twin's balance, we can decomission contract
         if decomission {
-            Self::_update_contract_state(contract, &types::ContractState::OutOfFunds)?;
+            contract.state = types::ContractState::OutOfFunds;
+            Contracts::insert(contract.contract_id, contract);
             return Ok(());
         }
 
@@ -721,45 +718,6 @@ impl<T: Config> Module<T> {
     }
 
     // Helper function that updates the contract state and manages storage accordingly
-    pub fn _update_contract_state(
-        contract: &mut types::Contract,
-        state: &types::ContractState,
-    ) -> DispatchResult {
-        match &contract.contract_type {
-            types::ContractData::NodeContract(node_contract) => {
-                // Remove contract from double map first
-                let mut contracts = NodeContracts::get(&node_contract.node_id, &contract.state);
-
-                match contracts
-                    .iter()
-                    .position(|ct| ct.contract_id == contract.contract_id)
-                {
-                    Some(index) => {
-                        // remove contract with state from double map first
-                        contracts.remove(index);
-                        NodeContracts::insert(&node_contract.node_id, &contract.state, &contracts);
-
-                        // assign new state
-                        contract.state = state.clone();
-                        contracts.insert(index, contract.clone());
-                    }
-                    None => {
-                        contracts.push(contract.clone());
-                    }
-                };
-
-                // insert contract with new state into double map
-                NodeContracts::insert(&node_contract.node_id, &contract.state, &contracts);
-            }
-            _ => (),
-        }
-        contract.state = state.clone();
-        // update Contracts storage as well
-        Contracts::insert(&contract.contract_id.clone(), contract);
-
-        Ok(())
-    }
-
     pub fn _reserve_ip(
         contract_id: u64,
         node_contract: &mut types::NodeContract,
