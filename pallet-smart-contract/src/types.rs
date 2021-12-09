@@ -4,6 +4,13 @@ use substrate_fixed::types::U64F64;
 
 use pallet_tfgrid::types;
 
+/// Utility type for managing upgrades/migrations.
+#[derive(Encode, Decode, Clone, Debug, PartialEq)]
+pub enum PalletStorageVersion {
+    V1,
+    V2,
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct Contract {
     pub version: u32,

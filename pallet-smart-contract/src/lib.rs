@@ -94,6 +94,9 @@ decl_storage! {
 
         // ID maps
         ContractID: u64;
+
+        /// The current version of the pallet.
+        PalletVersion: types::PalletStorageVersion = types::PalletStorageVersion::V1;
     }
 }
 
