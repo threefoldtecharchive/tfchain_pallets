@@ -19,6 +19,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod migrations;
+
 pub mod types;
 
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
@@ -83,18 +85,28 @@ decl_storage! {
         // ContractIDByNodeIDAndHash is a mapping for a contract ID by supplying a node_id and a deployment_hash
         // this combination makes a deployment for a user / node unique
         pub ContractIDByNodeIDAndHash get(fn node_contract_by_hash): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) Vec<u8> => u64;
+        
+        // TODO remove node contracts after we did a successfull migration
         pub NodeContracts get(fn node_contracts): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) types::ContractState => Vec<types::Contract>;
+        pub ActiveNodeContracts get(fn active_node_contracts): map hasher(blake2_128_concat) u32 => Vec<u64>;
         pub ContractsToBillAt get(fn contract_to_bill_at_block): map hasher(blake2_128_concat) u64 => Vec<u64>;
         pub ContractIDByNameRegistration get(fn contract_id_by_name_registration): map hasher(blake2_128_concat) Vec<u8> => u64;
 
         // ID maps
         ContractID: u64;
+
+        /// The current version of the pallet.
+        PalletVersion: types::PalletStorageVersion = types::PalletStorageVersion::V1;
     }
 }
 
 decl_module! {
     pub struct Module<T: Config> for enum Call where origin: T::Origin {
         fn deposit_event() = default;
+
+        fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			migrations::migrate_node_contracts::<T>()
+		}
 
         #[weight = 10]
         fn create_node_contract(origin, node_id: u32, data: Vec<u8>, deployment_hash: Vec<u8>, public_ips: u32){
@@ -190,9 +202,9 @@ impl<T: Config> Module<T> {
 
         ContractIDByNodeIDAndHash::insert(node_id, deployment_hash, id);
 
-        let mut node_contracts = NodeContracts::get(&node_contract.node_id, &contract.state);
-        node_contracts.push(contract.clone());
-        NodeContracts::insert(&node_contract.node_id, &contract.state, &node_contracts);
+        let mut node_contracts = ActiveNodeContracts::get(&node_contract.node_id);
+        node_contracts.push(id);
+        ActiveNodeContracts::insert(&node_contract.node_id, &node_contracts);
 
         Self::deposit_event(RawEvent::ContractCreated(contract));
 
@@ -725,37 +737,41 @@ impl<T: Config> Module<T> {
         contract: &mut types::Contract,
         state: &types::ContractState,
     ) -> DispatchResult {
-        match &contract.contract_type {
-            types::ContractData::NodeContract(node_contract) => {
-                // Remove contract from double map first
-                let mut contracts = NodeContracts::get(&node_contract.node_id, &contract.state);
-
-                match contracts
-                    .iter()
-                    .position(|ct| ct.contract_id == contract.contract_id)
-                {
-                    Some(index) => {
-                        // remove contract with state from double map first
-                        contracts.remove(index);
-                        NodeContracts::insert(&node_contract.node_id, &contract.state, &contracts);
-
-                        // assign new state
-                        contract.state = state.clone();
-                        contracts.insert(index, contract.clone());
-                    }
-                    None => {
-                        contracts.push(contract.clone());
-                    }
-                };
-
-                // insert contract with new state into double map
-                NodeContracts::insert(&node_contract.node_id, &contract.state, &contracts);
-            }
-            _ => (),
-        }
+        // update the state and save the contract
         contract.state = state.clone();
-        // update Contracts storage as well
-        Contracts::insert(&contract.contract_id.clone(), contract);
+        Contracts::insert(&contract.contract_id, contract.clone());
+
+        // if the contract is a name contract, nothing to do left here
+        match contract.contract_type {
+            types::ContractData::NameContract(_) => return Ok(()),
+            _ => (),
+        };
+
+        // if the contract is a node contract
+        // manage the ActiveNodeContracts map accordingly
+        let node_contract = Self::get_node_contract(contract)?;
+
+        let mut contracts = ActiveNodeContracts::get(&node_contract.node_id);
+
+        match contracts
+            .iter()
+            .position(|id| id == &contract.contract_id)
+        {
+            Some(index) => {
+                // if the new contract state is delete, remove the contract id from the map
+                if state == &types::ContractState::Deleted {
+                    contracts.remove(index);
+                }
+            }
+            None => {
+                // if the contract is not present add it to the active contracts map
+                if state == &types::ContractState::Created {
+                    contracts.push(contract.contract_id);
+                }
+            }
+        };
+
+        ActiveNodeContracts::insert(&node_contract.node_id, &contracts);
 
         Ok(())
     }
