@@ -25,12 +25,10 @@ pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Con
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
     type Currency: Currency<Self::AccountId>;
     type StakingPoolAccount: Get<Self::AccountId>;
+    type BillingFrequency: Get<u64>;
 }
 
 pub const CONTRACT_VERSION: u32 = 1;
-// Frequency of contract billing in number of blocks
-// 600 = every 1 hour
-pub const BILLING_FREQUENCY_IN_BLOCKS: u64 = 600;
 
 pub type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
@@ -447,27 +445,32 @@ impl<T: Config> Module<T> {
         let current_block_u64: u64 = block.saturated_into::<u64>();
         let contracts = ContractsToBillAt::get(current_block_u64);
         for contract_id in contracts {
-            let contract = Contracts::get(contract_id);
-            if contract.state != types::ContractState::Created {
+            let mut contract = Contracts::get(contract_id);
+            let contract_billing_info = ContractBillingInformationByID::get(contract_id);
+
+            // if the contract is in any other state then created and it has no unbilled amounts left, skip it
+            // this contract will be removed from the billing cycle when this function returns
+            if contract.state != types::ContractState::Created && contract_billing_info.amount_unbilled == 0 {
                 continue;
             }
-            Self::_bill_contract(contract)?;
+
+            // prepare the contract to be billed at the next billing cycle
+            Self::_reinsert_contract_to_bill(contract.contract_id);
+
+            let result = match contract.contract_type {
+                types::ContractData::NodeContract(_) => Self::_bill_node_contract(&mut contract),
+                types::ContractData::NameContract(_) => Self::_bill_name_contract(&mut contract),
+            };
+    
+            match result {
+                Ok(_) => {
+                    debug::info!("billed contract with id {:?} at block {:?}", contract_id, block);
+                }
+                Err(err) => {
+                    debug::info!("error while billing contract with id {:?}: {:?}", contract_id, err);
+                }
+            }
         }
-        Ok(())
-    }
-
-    // Bills a contract based on:
-    // Saved amount unbilled on the contract, this is incremented by the node sending capacity reports
-    // We calculate total IP cost for the amount between the last billed time and now and add this to the amount due
-    // If the user runs out of balance, we decomission the contract and therefor will be removed, ips will be freed as well
-    fn _bill_contract(mut contract: types::Contract) -> DispatchResult {
-        // Reinsert contract to be billed for the next frequency
-        Self::_reinsert_contract_to_bill(contract.contract_id);
-        match contract.contract_type {
-            types::ContractData::NodeContract(_) => Self::_bill_node_contract(&mut contract)?,
-            types::ContractData::NameContract(_) => Self::_bill_name_contract(&mut contract)?,
-        };
-
         Ok(())
     }
 
@@ -496,9 +499,9 @@ impl<T: Config> Module<T> {
 
         // If cost is 0, reinsert to be billed at next interval
         if total_cost == 0 {
-            // Self::_reinsert_contract_to_bill(contract.contract_id)?;
             return Ok(());
         }
+
         let tft_price = U64F64::from_num(pallet_tft_price::AverageTftPrice::get());
         if tft_price <= U64F64::from_num(0) {
             debug::info!("TFT price is zero");
@@ -713,7 +716,7 @@ impl<T: Config> Module<T> {
     pub fn _reinsert_contract_to_bill(contract_id: u64) {
         let now = <frame_system::Module<T>>::block_number().saturated_into::<u64>();
         // Save the contract to be billed in now + BILLING_FREQUENCY_IN_BLOCKS
-        let future_block = now + BILLING_FREQUENCY_IN_BLOCKS;
+        let future_block = now + T::BillingFrequency::get();
         let mut contracts = ContractsToBillAt::get(future_block);
         contracts.push(contract_id);
         ContractsToBillAt::insert(future_block, &contracts);

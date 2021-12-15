@@ -98,10 +98,15 @@ impl pallet_timestamp::Config for TestRuntime {
     type WeightInfo = pallet_timestamp::weights::SubstrateWeight<TestRuntime>;
 }
 
+parameter_types! {
+    pub const BillingFrequency: u64 = 10;
+}
+
 impl Config for TestRuntime {
     type Event = Event;
     type Currency = Balances;
     type StakingPoolAccount = StakingPoolAccount;
+    type BillingFrequency = BillingFrequency;
 }
 
 type AccountPublic = <MultiSignature as Verify>::Signer;

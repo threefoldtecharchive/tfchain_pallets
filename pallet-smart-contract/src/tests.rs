@@ -496,6 +496,63 @@ fn test_name_registration_fails_with_invalid_dns_name() {
 }
 
 #[test]
+fn test_contract_billing_loop() {
+    new_test_ext().execute_with(|| {
+        prepare_farm_and_node();
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1).unwrap();
+        run_to_block(1);
+
+        assert_ok!(SmartContractModule::create_node_contract(
+            Origin::signed(bob()),
+            1,
+            "some_data".as_bytes().to_vec(),
+            "hash".as_bytes().to_vec(),
+            1
+        ));
+
+        let contract_to_bill_at_block = SmartContractModule::contract_to_bill_at_block(11);
+        assert_eq!(contract_to_bill_at_block.len(), 1);
+
+        run_to_block(12);
+        let contract_to_bill_at_block = SmartContractModule::contract_to_bill_at_block(21);
+        assert_eq!(contract_to_bill_at_block.len(), 1);
+
+        run_to_block(22);
+        let contract_to_bill_at_block = SmartContractModule::contract_to_bill_at_block(31);
+        assert_eq!(contract_to_bill_at_block.len(), 1);
+
+        run_to_block(31);
+        assert_ok!(SmartContractModule::create_name_contract(
+            Origin::signed(bob()),
+            "foobar".as_bytes().to_vec()
+        ));
+
+        run_to_block(32);
+        let contract_to_bill_at_block = SmartContractModule::contract_to_bill_at_block(41);
+        assert_eq!(contract_to_bill_at_block.len(), 2);
+
+        run_to_block(42);
+        let contract_to_bill_at_block = SmartContractModule::contract_to_bill_at_block(51);
+        assert_eq!(contract_to_bill_at_block.len(), 2);
+
+        run_to_block(52);
+        assert_ok!(SmartContractModule::cancel_contract(
+            Origin::signed(bob()),
+            2
+        ));
+
+        // after a canceling the second contract it should still be in the contract to be billed map
+        // but it should be removed from the next billing cycle since it's canceled and it does not have unbilled amounts
+        let contract_to_bill_at_block = SmartContractModule::contract_to_bill_at_block(61);
+        assert_eq!(contract_to_bill_at_block.len(), 2);
+
+        run_to_block(62);
+        let contract_to_bill_at_block = SmartContractModule::contract_to_bill_at_block(71);
+        assert_eq!(contract_to_bill_at_block.len(), 1);
+    })
+}
+
+#[test]
 fn test_node_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
@@ -514,7 +571,7 @@ fn test_node_contract_billing() {
 
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
         assert_eq!(contract_billing_info.last_updated, 1628082000);
-        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
+        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(11);
         assert_eq!(contract_to_bill, [1]);
 
         let gigabyte = 1000 * 1000 * 1000;
@@ -547,7 +604,7 @@ fn test_node_contract_billing() {
 
         // let mature 10 blocks
         // because we bill every 10 blocks
-        run_to_block(602);
+        run_to_block(12);
         // Test that the expected events were emitted
         let our_events = System::events()
             .into_iter()
@@ -621,12 +678,12 @@ fn test_name_contract_billing() {
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
         assert_eq!(contract_billing_info.last_updated, 1628082000);
 
-        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
+        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(11);
         assert_eq!(contract_to_bill, [1]);
 
-        // let mature 60 blocks
-        // because we bill every 60 blocks
-        run_to_block(602);
+        // let mature 11 blocks
+        // because we bill every 10 blocks
+        run_to_block(12);
 
         // Test that the expected events were emitted
         let our_events = System::events()
@@ -650,38 +707,6 @@ fn test_name_contract_billing() {
         let expected_events: std::vec::Vec<RawEvent<AccountId>> =
             vec![RawEvent::ContractBilled(contract_bill_event)];
         assert_eq!(our_events[1], expected_events[0]);
-    });
-}
-
-#[test]
-fn test_node_contract_reinsertion() {
-    new_test_ext().execute_with(|| {
-        prepare_farm_and_node();
-        run_to_block(1);
-
-        Timestamp::set_timestamp(1628082000 * 1000);
-
-        assert_ok!(SmartContractModule::create_node_contract(
-            Origin::signed(bob()),
-            1,
-            "some_data".as_bytes().to_vec(),
-            "hash".as_bytes().to_vec(),
-            0
-        ));
-        assert_ok!(SmartContractModule::create_node_contract(
-            Origin::signed(bob()),
-            1,
-            "some_data_t".as_bytes().to_vec(),
-            "some_hash".as_bytes().to_vec(),
-            0
-        ));
-
-        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(601);
-        assert_eq!(contract_to_bill, [1, 2]);
-
-        run_to_block(1201);
-        let contract_to_bill = SmartContractModule::contract_to_bill_at_block(1201);
-        assert_eq!(contract_to_bill, [1, 2]);
     });
 }
 
