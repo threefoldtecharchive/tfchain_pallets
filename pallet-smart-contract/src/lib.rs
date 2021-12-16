@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-    debug, decl_error, decl_event, decl_module, decl_storage, ensure, ensure_root,
+    debug, decl_error, decl_event, decl_module, decl_storage, ensure,
     traits::{Currency, ExistenceRequirement::KeepAlive, Vec, Get},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult, Perbill};
 
 use pallet_tfgrid;
