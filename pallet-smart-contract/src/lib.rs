@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-    debug, decl_error, decl_event, decl_module, decl_storage, ensure,
+    debug, decl_error, decl_event, decl_module, decl_storage, ensure, ensure_root,
     traits::{Currency, ExistenceRequirement::KeepAlive, Vec, Get},
 };
 use frame_system::{self as system, ensure_signed};
@@ -126,6 +126,13 @@ decl_module! {
         fn create_name_contract(origin, name: Vec<u8>) {
             let account_id = ensure_signed(origin)?;
             Self::_create_name_contract(account_id, name)?;
+        }
+
+        // VERY DANGEROUS EXTRINSIC, ONLT CALL WITH RIGHT CONTRACT ID (ENSURE CONTRACT DOES NOT HAVE BILLING CYCLE)
+        #[weight = 10]
+        fn insert_contract_to_bill_at(origin, contract_id: u64) {
+            ensure_root(origin)?;
+            Self::_reinsert_contract_to_bill(contract_id);
         }
 
         fn on_finalize(block: T::BlockNumber) {
