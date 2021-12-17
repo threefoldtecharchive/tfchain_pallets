@@ -22,6 +22,8 @@ mod tests;
 #[cfg(test)]
 mod mock;
 
+mod migration;
+
 pub mod types;
 
 pub type BalanceOf<T> =
@@ -36,7 +38,7 @@ pub trait Config: system::Config + timestamp::Config {
 pub const TFGRID_ENTITY_VERSION: u32 = 1;
 pub const TFGRID_FARM_VERSION: u32 = 1;
 pub const TFGRID_TWIN_VERSION: u32 = 1;
-pub const TFGRID_NODE_VERSION: u32 = 2;
+pub const TFGRID_NODE_VERSION: u32 = 3;
 pub const TFGRID_PRICING_POLICY_VERSION: u32 = 1;
 pub const TFGRID_CERTIFICATION_CODE_VERSION: u32 = 1;
 pub const TFGRID_FARMING_POLICY_VERSION: u32 = 1;
@@ -261,6 +263,10 @@ decl_module! {
         type Error = Error<T>;
 
         fn deposit_event() = default;
+
+        fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			migration::migrate_to_v3::<T>()
+		}
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_farm(origin, name: Vec<u8>, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
@@ -487,6 +493,7 @@ decl_module! {
                 created,
                 farming_policy_id,
                 interfaces,
+                certification_type: types::CertificationType::default(),
             };
 
             Nodes::insert(id, &new_node);
@@ -527,6 +534,22 @@ decl_module! {
 
             // refund node wallet if needed
             Self::fund_node_wallet(node_id);
+
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1) + T::DbWeight::get().reads(1)]
+        pub fn set_node_certification(origin, node_id: u32, certification_type: types::CertificationType) -> dispatch::DispatchResult {
+            ensure_root(origin)?;
+            ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
+            let mut stored_node = Nodes::get(node_id);
+
+            stored_node.certification_type = certification_type;
+
+            // override node in storage
+            Nodes::insert(stored_node.id, &stored_node);
+
+            Self::deposit_event(RawEvent::NodeUpdated(stored_node));
 
             Ok(())
         }
