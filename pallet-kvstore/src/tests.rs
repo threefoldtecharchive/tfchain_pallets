@@ -1,5 +1,5 @@
-use crate::{self as pallet_kvstore, Config, Error, RawEvent};
-use frame_support::{assert_err, assert_ok, construct_runtime, parameter_types};
+use crate::{self as pallet_kvstore, Config, RawEvent};
+use frame_support::{assert_ok, construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_io::TestExternalities;
 use sp_runtime::{
@@ -69,16 +69,11 @@ impl ExternalityBuilder {
 }
 
 #[test]
-fn set() {
+fn test_set_and_get() {
     ExternalityBuilder::build().execute_with(|| {
         let key = "name";
         let value = "nametest";
-        //make sure Entery does not exists
-        assert_err!(
-            TFKVStoreModule::get(Origin::signed(1), key.as_bytes().to_vec()),
-            Error::<TestRuntime>::NoValueStored
-        );
-
+        // make sure Entry does not exists
         assert_ok!(TFKVStoreModule::set(
             Origin::signed(1),
             key.as_bytes().to_vec(),
@@ -90,46 +85,15 @@ fn set() {
             value.as_bytes().to_vec(),
         ));
 
-        assert_eq!(System::events()[0].event, expected_event,);
+        assert_eq!(System::events()[0].event, expected_event);
+
+        let entry_value = TFKVStoreModule::key_value_store(1, key.as_bytes().to_vec());
+        assert_eq!(entry_value, value.as_bytes().to_vec());
     })
 }
 
 #[test]
-fn get() {
-    ExternalityBuilder::build().execute_with(|| {
-        let key = "Job";
-        let value = "Engineer";
-        assert_ok!(TFKVStoreModule::set(
-            Origin::signed(1),
-            key.as_bytes().to_vec(),
-            value.as_bytes().to_vec()
-        ));
-        let expected_event = Event::pallet_kvstore(RawEvent::EntrySet(
-            1,
-            key.as_bytes().to_vec(),
-            value.as_bytes().to_vec(),
-        ));
-
-        assert_eq!(System::events()[0].event, expected_event,);
-
-        // Test getting the value
-
-        assert_ok!(TFKVStoreModule::get(
-            Origin::signed(1),
-            key.as_bytes().to_vec()
-        ));
-        let expected_event = Event::pallet_kvstore(RawEvent::EntryGot(
-            1,
-            key.as_bytes().to_vec(),
-            value.as_bytes().to_vec(),
-        ));
-
-        assert_eq!(System::events()[1].event, expected_event,);
-    })
-}
-
-#[test]
-fn delete() {
+fn test_delete() {
     ExternalityBuilder::build().execute_with(|| {
         let key = "Address";
         let value = "Cairo";
@@ -156,11 +120,11 @@ fn delete() {
             value.as_bytes().to_vec(),
         ));
 
-        assert_eq!(System::events()[1].event, expected_event,);
+        assert_eq!(System::events()[1].event, expected_event);
 
-        assert_err!(
-            TFKVStoreModule::get(Origin::signed(1), key.as_bytes().to_vec()),
-            Error::<TestRuntime>::NoValueStored
-        );
+        // check if value get deleted
+        let entry_value = TFKVStoreModule::key_value_store(1, key.as_bytes().to_vec());
+        let expected_value = "".as_bytes().to_vec();
+        assert_eq!(entry_value, expected_value);
     })
 }

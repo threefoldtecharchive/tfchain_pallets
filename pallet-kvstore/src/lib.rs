@@ -1,7 +1,6 @@
 //! A pallet for Threefold key-value store
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// use frame_support::traits::Vec;
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResult, ensure,
 };
@@ -16,7 +15,7 @@ pub trait Config: frame_system::Config {
 
 decl_storage! {
     trait Store for Module<T: Config> as TFKVStore {
-        pub TFKVStore get(fn storag_map):
+        pub TFKVStore get(fn key_value_store):
          double_map hasher(blake2_128_concat) T::AccountId,  hasher(blake2_128_concat) Vec<u8> => Vec<u8>;
     }
 }
