@@ -663,6 +663,90 @@ fn test_node_contract_billing() {
 }
 
 #[test]
+fn test_node_contract_billing_cycles() {
+    new_test_ext().execute_with(|| {
+        prepare_farm_and_node();
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1).unwrap();
+        run_to_block(1);
+        Timestamp::set_timestamp(1628082000 * 1000);
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
+
+        assert_ok!(SmartContractModule::create_node_contract(
+            Origin::signed(bob()),
+            1,
+            "some_data".as_bytes().to_vec(),
+            "hash".as_bytes().to_vec(),
+            1
+        ));
+
+        push_report();
+        run_to_block(12);
+        check_report_cost();
+
+        push_report();
+        run_to_block(22);
+        check_report_cost();
+
+        push_report();
+        run_to_block(32);
+        check_report_cost();
+
+        push_report();
+        run_to_block(42);
+        check_report_cost();
+
+        push_report();
+        run_to_block(52);
+        check_report_cost();
+    });
+}
+
+fn push_report() {
+    let gigabyte = 1000 * 1000 * 1000;
+    let mut consumption_reports = Vec::new();
+    consumption_reports.push(super::types::Consumption {
+        contract_id: 1,
+        cru: 2,
+        hru: 0,
+        mru: 2 * gigabyte,
+        sru: 60 * gigabyte,
+        nru: 3 * gigabyte,
+        timestamp: 1628085600,
+    });
+
+    assert_ok!(SmartContractModule::add_reports(
+        Origin::signed(alice()),
+        consumption_reports
+    ));
+}
+
+fn check_report_cost() {
+    // Test that the expected events were emitted
+    let our_events = System::events()
+    .into_iter()
+    .map(|r| r.event)
+    .filter_map(|e| {
+        if let Event::pallet_smart_contract(inner) = e {
+            Some(inner)
+        } else {
+            None
+        }
+    })
+    .collect::<Vec<_>>();
+
+    let contract_bill_event = types::ContractBill {
+        contract_id: 1,
+        timestamp: 1628082000,
+        discount_level: types::DiscountLevel::None,
+        amount_billed: 4599739, //amount here is (the above amount + 50000 for ip usage) divided by tft value almost 0.05 - discount
+    };
+    let mut expected_events: std::vec::Vec<RawEvent<AccountId>> = Vec::new();
+    expected_events.push(RawEvent::ContractBilled(contract_bill_event));
+
+    assert_eq!(our_events[2], expected_events[0]);
+}
+
+#[test]
 fn test_name_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
