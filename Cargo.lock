@@ -1193,6 +1193,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-runtime-upgrade"
+version = "3.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+]
+
+[[package]]
 name = "pallet-smart-contract"
 version = "3.0.0"
 dependencies = [
