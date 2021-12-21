@@ -30,7 +30,7 @@ pub type BalanceOf<T> =
 pub trait Config: system::Config + timestamp::Config {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
     type Currency: Currency<Self::AccountId>;
-    /// Origin for runtime upgrades
+    /// Origin for sudo extrinsics
     type CouncilOrigin: EnsureOrigin<Self::Origin>;
 }
 
