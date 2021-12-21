@@ -136,7 +136,7 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn force_change_session(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::AddRemoveOrigin::ensure_origin(origin)?;
 			<pallet_session::Module<T>>::rotate_session();
 			Flag::<T>::put(true);
 			Ok(().into())
