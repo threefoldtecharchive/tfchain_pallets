@@ -12,6 +12,7 @@ use sp_runtime::{
     traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup},
 };
 use sp_std::prelude::*;
+use frame_system::EnsureRoot;
 
 pub type Signature = MultiSignature;
 
@@ -83,6 +84,7 @@ impl pallet_balances::Config for TestRuntime {
 impl pallet_tfgrid::Config for TestRuntime {
     type Event = Event;
     type Currency = Balances;
+    type CouncilOrigin = EnsureRoot<Self::AccountId>;
 }
 
 impl pallet_tft_price::Config for TestRuntime {
