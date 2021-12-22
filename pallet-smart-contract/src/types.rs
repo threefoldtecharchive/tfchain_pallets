@@ -9,6 +9,7 @@ use pallet_tfgrid::types;
 pub enum PalletStorageVersion {
     V1,
     V2,
+    V3
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
