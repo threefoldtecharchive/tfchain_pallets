@@ -72,7 +72,7 @@ impl frame_system::Config for TestRuntime {
 impl Config for TestRuntime {
     type Event = Event;
     type Currency = Balances;
-    type CouncilOrigin = EnsureRoot<Self::AccountId>;
+    type ExternalOrigin = EnsureRoot<Self::AccountId>;
 }
 
 impl pallet_balances::Config for TestRuntime {

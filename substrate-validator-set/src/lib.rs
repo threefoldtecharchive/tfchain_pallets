@@ -27,7 +27,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Origin for adding or removing a validator.
-		type AddRemoveOrigin: EnsureOrigin<Self::Origin>;
+		/// Can be the root of another origin configured in the runtime
+		type ExternalOrigin: EnsureOrigin<Self::Origin>;
 	}
 
 	#[pallet::pallet]
@@ -89,7 +90,7 @@ pub mod pallet {
 		/// New validator's session keys should be set in session module before calling this.
 		#[pallet::weight(0)]
 		pub fn add_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResultWithPostInfo {
-			T::AddRemoveOrigin::ensure_origin(origin)?;
+			T::ExternalOrigin::ensure_origin(origin)?;
 
 			let mut validators: Vec<T::AccountId>;
 
@@ -113,7 +114,7 @@ pub mod pallet {
 		/// Remove a validator using root/sudo privileges.
 		#[pallet::weight(0)]
 		pub fn remove_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResultWithPostInfo {
-			T::AddRemoveOrigin::ensure_origin(origin)?;
+			T::ExternalOrigin::ensure_origin(origin)?;
 			let mut validators = <Validators<T>>::get().ok_or(Error::<T>::NoValidators)?;
 
 			// Assuming that this will be a PoA network for enterprise use-cases,
@@ -136,7 +137,7 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn force_change_session(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			T::AddRemoveOrigin::ensure_origin(origin)?;
+			T::ExternalOrigin::ensure_origin(origin)?;
 			<pallet_session::Module<T>>::rotate_session();
 			Flag::<T>::put(true);
 			Ok(().into())
