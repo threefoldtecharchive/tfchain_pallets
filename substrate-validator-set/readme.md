@@ -2,6 +2,8 @@
 
 **Fork from https://github.com/gautamdhameja/substrate-validator-set commit hash: f83f1000c298c376ab180787eb73d0a0fdb740e0**
 
+Code changes are in `diff.patch`
+
 A [Substrate](https://github.com/paritytech/substrate/) pallet to add/remove validators using extrinsics, in Substrate-based PoA networks. 
 
 **Note: Current build is compatible with Substrate [v3.0.0](https://github.com/paritytech/substrate/releases/tag/v3.0.0) release.**
