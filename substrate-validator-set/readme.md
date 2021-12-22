@@ -1,5 +1,7 @@
 # Substrate Validator Set
 
+**Fork from https://github.com/gautamdhameja/substrate-validator-set commit hash: f83f1000c298c376ab180787eb73d0a0fdb740e0**
+
 A [Substrate](https://github.com/paritytech/substrate/) pallet to add/remove validators using extrinsics, in Substrate-based PoA networks. 
 
 **Note: Current build is compatible with Substrate [v3.0.0](https://github.com/paritytech/substrate/releases/tag/v3.0.0) release.**
@@ -16,8 +18,9 @@ To see this pallet in action in a Substrate runtime, watch this video - https://
 validatorset = { 
   version = "3.0.0", 
   package = "substrate-validator-set", 
-  git = "https://github.com/gautamdhameja/substrate-validator-set.git", 
-  default-features = false 
+  git = "https://github.com/threefoldtech/tfchain_pallets", 
+  default-features = false
+  branch = "development"
 }
 pallet-session = { default-features = false, version = '3.0.0' }
 ...
