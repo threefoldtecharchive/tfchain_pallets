@@ -113,7 +113,7 @@ decl_module! {
         #[weight = 10]
         fn cancel_contract(origin, contract_id: u64){
             let account_id = ensure_signed(origin)?;
-            Self::_cancel_contract(account_id, contract_id)?;
+            Self::_cancel_contract(account_id, contract_id, types::Cause::CanceledByUser)?;
         }
 
         #[weight = 10]
@@ -167,7 +167,7 @@ impl<T: Config> Module<T> {
         if ContractIDByNodeIDAndHash::contains_key(node_id, &deployment_hash) {
             let contract_id = ContractIDByNodeIDAndHash::get(node_id, &deployment_hash);
             let contract = Contracts::get(contract_id);
-            if contract.state != types::ContractState::Deleted {
+            if !contract.is_state_delete() {
                 return Err(DispatchError::from(Error::<T>::ContractIsNotUnique));
             }
         }
@@ -274,7 +274,7 @@ impl<T: Config> Module<T> {
         Ok(())
     }
 
-    pub fn _cancel_contract(account_id: T::AccountId, contract_id: u64) -> DispatchResult {
+    pub fn _cancel_contract(account_id: T::AccountId, contract_id: u64, cause: types::Cause) -> DispatchResult {
         ensure!(
             Contracts::contains_key(contract_id),
             Error::<T>::ContractNotExists
@@ -310,7 +310,7 @@ impl<T: Config> Module<T> {
             }
         };
 
-        Self::_update_contract_state(&mut contract, &types::ContractState::Deleted)?;
+        Self::_update_contract_state(&mut contract, &types::ContractState::Deleted(cause))?;
 
         Ok(())
     }
@@ -386,8 +386,10 @@ impl<T: Config> Module<T> {
             return Ok(());
         }
 
+        println!("contract billing last updated: {:?}, report timestamp: {:?}", contract_billing_info.last_updated, report.timestamp);
         let seconds_elapsed = report.timestamp - contract_billing_info.last_updated;
         debug::info!("seconds elapsed: {:?}", seconds_elapsed);
+        println!("seconds elapsed: {:?}", seconds_elapsed);
 
         let hru = U64F64::from_num(report.hru) / pricing_policy.su.factor();
         let sru = U64F64::from_num(report.sru) / pricing_policy.su.factor();
@@ -448,6 +450,7 @@ impl<T: Config> Module<T> {
             let mut contract = Contracts::get(contract_id);
             let contract_billing_info = ContractBillingInformationByID::get(contract_id);
 
+            println!("contract state: {:?}", contract.state);
             // if the contract is in any other state then created and it has no unbilled amounts left, skip it
             // this contract will be removed from the billing cycle when this function returns
             if contract.state != types::ContractState::Created && contract_billing_info.amount_unbilled == 0 {
@@ -508,6 +511,7 @@ impl<T: Config> Module<T> {
             return Err(DispatchError::from(Error::<T>::TFTPriceValueError));
         }
         let total_cost_tft = U64F64::from_num(total_cost) / tft_price;
+        println!("total tft cost: {:?}", total_cost_tft);
         let total_cost_tft_64 = U64F64::to_num(total_cost_tft);
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
         let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
@@ -525,37 +529,39 @@ impl<T: Config> Module<T> {
 
         let mut decomission = false;
         if amount_due >= balance {
+            debug::info!("decomissioning contract because balance on twin account is lower than amount due");
             amount_due = balance;
             decomission = true;
         }
 
+        println!("decomission: {:?}, amount due: {:?}, amount due as u128 {:?}, balance: {:?}, discount: {:?}", decomission, amount_due, amount_due_as_u128, balance, discount_received);
+
         // Distribute cultivation rewards
-        Self::_distribute_cultivation_rewards(
-            &contract,
-            &pricing_policy,
-            amount_due,
-        )?;
+        match Self::_distribute_cultivation_rewards(&contract, &pricing_policy, amount_due) {
+            Ok(_) => (),
+            Err(err) => debug::info!("error while distributing cultivation rewards {:?}", err)
+        };
 
         let contract_bill = types::ContractBill {
             contract_id: contract.contract_id,
             timestamp: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
             discount_level: discount_received.clone(),
-            amount_billed: amount_due_as_u128,
+            amount_billed: amount_due.saturated_into::<u128>(),
         };
         Self::deposit_event(RawEvent::ContractBilled(contract_bill));
-
-        // If total balance exceeds the twin's balance, we can decomission contract
-        if decomission {
-            if node_contract.public_ips > 0 {
-                Self::_free_ip(contract.contract_id, &mut node_contract)?;
-            }
-            Self::_update_contract_state(contract, &types::ContractState::OutOfFunds)?;
-            return Ok(());
-        }
 
         // set the amount unbilled back to 0
         contract_billing_info.amount_unbilled = 0;
         ContractBillingInformationByID::insert(contract.contract_id, &contract_billing_info);
+        
+        // If total balance exceeds the twin's balance, we can decomission contract
+        if decomission {
+            if node_contract.public_ips > 0 {
+                let _ = Self::_free_ip(contract.contract_id, &mut node_contract);
+            }
+            let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+            return Self::_cancel_contract(twin.account_id, contract.contract_id, types::Cause::OutOfFunds);
+        }
 
         Ok(())
     }
@@ -603,8 +609,8 @@ impl<T: Config> Module<T> {
 
         // If total balance exceeds the twin's balance, we can decomission contract
         if decomission {
-            Self::_update_contract_state(contract, &types::ContractState::OutOfFunds)?;
-            return Ok(());
+            let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
+            Self::_cancel_contract(twin.account_id, contract.contract_id, types::Cause::OutOfFunds)?;
         }
 
         Ok(())
@@ -754,7 +760,7 @@ impl<T: Config> Module<T> {
         {
             Some(index) => {
                 // if the new contract state is delete, remove the contract id from the map
-                if state == &types::ContractState::Deleted {
+                if contract.is_state_delete() {
                     contracts.remove(index);
                 }
             }

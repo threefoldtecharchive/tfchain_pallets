@@ -20,6 +20,15 @@ pub struct Contract {
     pub contract_type: ContractData,
 }
 
+impl Contract {
+    pub fn is_state_delete(&self) -> bool {
+        match self.state {
+            ContractState::Deleted(_) => true,
+            ContractState::Created => false
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
 pub struct NodeContract {
     pub node_id: u32,
@@ -60,8 +69,13 @@ pub struct ContractBillingInformation {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
 pub enum ContractState {
     Created,
-    Deleted,
-    OutOfFunds,
+    Deleted(Cause),
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Debug)]
+pub enum Cause {
+    CanceledByUser,
+    OutOfFunds
 }
 
 impl Default for ContractState {

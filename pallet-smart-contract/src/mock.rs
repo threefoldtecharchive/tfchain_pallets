@@ -169,6 +169,10 @@ pub fn eve() -> AccountId {
     get_account_id_from_seed::<sr25519::Public>("Eve")
 }
 
+pub fn charlie() -> AccountId {
+    get_account_id_from_seed::<sr25519::Public>("Charlie")
+}
+
 pub fn get_staking_pool_account() -> AccountId {
     AccountId32::from_ss58check("5CNposRewardAccount11111111111111111111111111FSU").unwrap()
 }
@@ -178,7 +182,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         .build_storage::<TestRuntime>()
         .unwrap();
     let genesis = pallet_balances::GenesisConfig::<TestRuntime> {
-        balances: vec![(alice(), 1000000000000), (bob(), 2500000000)],
+        balances: vec![(alice(), 1000000000000), (bob(), 2500000000), (charlie(), 100000)],
     };
     genesis.assimilate_storage(&mut t).unwrap();
     t.into()
