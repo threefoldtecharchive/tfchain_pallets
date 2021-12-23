@@ -251,7 +251,7 @@ fn test_cancel_contract_works() {
 
         let expected_contract_value = types::Contract {
             contract_id: 1,
-            state: types::ContractState::Deleted,
+            state: types::ContractState::Deleted(types::Cause::CanceledByUser),
             twin_id: 1,
             version: 1,
             contract_type,
@@ -287,7 +287,7 @@ fn test_cancel_name_contract_works() {
 
         let expected_contract_value = types::Contract {
             contract_id: 1,
-            state: types::ContractState::Deleted,
+            state: types::ContractState::Deleted(types::Cause::CanceledByUser),
             twin_id: 1,
             version: 1,
             contract_type,
@@ -556,9 +556,7 @@ fn test_contract_billing_loop() {
 fn test_node_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
-        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1).unwrap();
         run_to_block(1);
-        Timestamp::set_timestamp(1628082000 * 1000);
         TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
 
         assert_ok!(SmartContractModule::create_node_contract(
@@ -569,92 +567,42 @@ fn test_node_contract_billing() {
             1
         ));
 
-        let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-        assert_eq!(contract_billing_info.last_updated, 1628082000);
         let contract_to_bill = SmartContractModule::contract_to_bill_at_block(11);
         assert_eq!(contract_to_bill, [1]);
 
-        let gigabyte = 1000 * 1000 * 1000;
-        let mut consumption_reports = Vec::new();
-        consumption_reports.push(super::types::Consumption {
-            contract_id: 1,
-            cru: 2,
-            hru: 0,
-            mru: 2 * gigabyte,
-            sru: 60 * gigabyte,
-            nru: 3 * gigabyte,
-            timestamp: 1628085600,
-        });
+        let initial_total_issuance = Balances::total_issuance();
 
-        let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-        let seconds_elapsed = 1628085600 - contract_billing_info.last_updated;
-        assert_eq!(seconds_elapsed, 3600);
-
-        assert_ok!(SmartContractModule::add_reports(
-            Origin::signed(alice()),
-            consumption_reports
-        ));
-
-        let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-        assert_eq!(contract_billing_info.amount_unbilled, 180001); //this amount in unit USD = 1/1e7
-
-        let total_issuance = Balances::total_issuance();
-        assert_eq!(total_issuance, 1002500000000);
-
-
-        // let mature 10 blocks
-        // because we bill every 10 blocks
+        push_report(11);
         run_to_block(12);
-        // Test that the expected events were emitted
-        let our_events = System::events()
-            .into_iter()
-            .map(|r| r.event)
-            .filter_map(|e| {
-                if let Event::pallet_smart_contract(inner) = e {
-                    Some(inner)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let contract_bill_event = types::ContractBill {
-            contract_id: 1,
-            timestamp: 1628082000,
-            discount_level: types::DiscountLevel::None,
-            amount_billed: 4599739, //amount here is (the above amount + 50000 for ip usage) divided by tft value almost 0.05 - discount
-        };
-        let expected_events = vec![RawEvent::ContractBilled(contract_bill_event)];
-
-        assert_eq!(our_events[2], expected_events[0]);
+        check_report_cost(2, 847965, 12, types::DiscountLevel::Default);
 
         // check the contract owners address to see if it got balance credited
         let twin = TfgridModule::twins(2);
         let b = Balances::free_balance(&twin.account_id);
         let balances_as_u128: u128 = b.saturated_into::<u128>();
 
-        let twin2_balance_should_be = 2500000000 - 4599739 as u128;
+        let twin2_balance_should_be = 2500000000 - 847965 as u128;
         assert_eq!(balances_as_u128, twin2_balance_should_be);
         
         let staking_pool_account_balance = Balances::free_balance(&get_staking_pool_account());
         let staking_pool_account_balance_as_u128: u128 = staking_pool_account_balance.saturated_into::<u128>();
         // equal to 5%
-        assert_eq!(staking_pool_account_balance_as_u128, 229987);
+        assert_eq!(staking_pool_account_balance_as_u128, 42398);
 
         let pricing_policy = TfgridModule::pricing_policies(1);
         let foundation_account_balance = Balances::free_balance(&pricing_policy.foundation_account);
         let foundation_account_balance_as_u128: u128 = foundation_account_balance.saturated_into::<u128>();
         // equal to 10%
-        assert_eq!(foundation_account_balance_as_u128, 459974);
+        assert_eq!(foundation_account_balance_as_u128, 84796);
 
         let sales_account_balance = Balances::free_balance(&pricing_policy.certified_sales_account);
         let sales_account_balance_as_u128: u128 = sales_account_balance.saturated_into::<u128>();
         // equal to 50%
-        assert_eq!(sales_account_balance_as_u128, 2299869);
+        assert_eq!(sales_account_balance_as_u128, 423982);
 
         let total_issuance = Balances::total_issuance();
         // total issueance is now previous total - amount burned from contract billed (35%)
-        assert_eq!(total_issuance, 1002500000000 - 1609909);
+        assert_eq!(total_issuance, initial_total_issuance - 296789);
 
         // amount unbilled should have been reset after a transfer between contract owner and farmer
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
@@ -666,9 +614,7 @@ fn test_node_contract_billing() {
 fn test_node_contract_billing_cycles() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
-        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 1).unwrap();
         run_to_block(1);
-        Timestamp::set_timestamp(1628082000 * 1000);
         TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
 
         assert_ok!(SmartContractModule::create_node_contract(
@@ -676,32 +622,91 @@ fn test_node_contract_billing_cycles() {
             1,
             "some_data".as_bytes().to_vec(),
             "hash".as_bytes().to_vec(),
-            1
+            0
         ));
 
-        push_report();
+        push_report(11);
         run_to_block(12);
-        check_report_cost();
+        check_report_cost(2, 24007, 12, types::DiscountLevel::Gold);
 
-        push_report();
+        push_report(21);
         run_to_block(22);
-        check_report_cost();
+        check_report_cost(4, 23999, 22, types::DiscountLevel::Gold);
 
-        push_report();
+        push_report(31);
         run_to_block(32);
-        check_report_cost();
+        check_report_cost(6, 23999, 32, types::DiscountLevel::Gold);
 
-        push_report();
+        push_report(41);
         run_to_block(42);
-        check_report_cost();
+        check_report_cost(8, 23999, 42, types::DiscountLevel::Gold);
 
-        push_report();
+        push_report(51);
         run_to_block(52);
-        check_report_cost();
+        check_report_cost(10, 23999, 52, types::DiscountLevel::Gold);
     });
 }
 
-fn push_report() {
+#[test]
+fn test_node_contract_billing_should_cancel_contract_when_out_of_funds() {
+    new_test_ext().execute_with(|| {
+        prepare_farm_and_node();
+        run_to_block(1);
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
+
+        assert_ok!(SmartContractModule::create_node_contract(
+            Origin::signed(charlie()),
+            1,
+            "some_data".as_bytes().to_vec(),
+            "hash".as_bytes().to_vec(),
+            0
+        ));
+
+        push_report(11);
+        run_to_block(12);
+        check_report_cost(2, 60016, 12, types::DiscountLevel::None);
+
+        let twin = TfgridModule::twins(3);
+        let b = Balances::free_balance(&twin.account_id);
+        let balances_as_u128: u128 = b.saturated_into::<u128>();
+
+        let twin2_balance_should_be = 100000 - 60016 as u128;
+        assert_eq!(balances_as_u128, twin2_balance_should_be);
+
+        push_report(21);
+        run_to_block(22);
+        check_report_cost(4, 39984, 22, types::DiscountLevel::None);
+
+        let twin = TfgridModule::twins(3);
+        let b = Balances::free_balance(&twin.account_id);
+        assert_eq!(b, 0);
+
+        let c1 = SmartContractModule::contracts(1);
+        assert_eq!(c1.state, types::ContractState::Deleted(types::Cause::OutOfFunds));
+
+        let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
+        assert_eq!(contract_billing_info.amount_unbilled, 0); //this amount in unit USD = 1/1e7
+
+        let our_events = System::events()
+        .into_iter()
+        .map(|r| r.event)
+        .filter_map(|e| {
+            if let Event::pallet_smart_contract(inner) = e {
+                Some(inner)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+        
+        let mut expected_events: std::vec::Vec<RawEvent<AccountId>> = Vec::new();
+        expected_events.push(RawEvent::NodeContractCanceled(1, 1, 3));
+
+        assert_eq!(our_events[5], expected_events[0]);
+    });
+}
+
+fn push_report(block_number: u64) {
     let gigabyte = 1000 * 1000 * 1000;
     let mut consumption_reports = Vec::new();
     consumption_reports.push(super::types::Consumption {
@@ -711,7 +716,7 @@ fn push_report() {
         mru: 2 * gigabyte,
         sru: 60 * gigabyte,
         nru: 3 * gigabyte,
-        timestamp: 1628085600,
+        timestamp: 1628082000 + (6*block_number),
     });
 
     assert_ok!(SmartContractModule::add_reports(
@@ -720,7 +725,7 @@ fn push_report() {
     ));
 }
 
-fn check_report_cost() {
+fn check_report_cost(index: usize, amount_billed: u128, block_number: u64, discount_level: types::DiscountLevel) {
     // Test that the expected events were emitted
     let our_events = System::events()
     .into_iter()
@@ -736,31 +741,27 @@ fn check_report_cost() {
 
     let contract_bill_event = types::ContractBill {
         contract_id: 1,
-        timestamp: 1628082000,
-        discount_level: types::DiscountLevel::None,
-        amount_billed: 4599739, //amount here is (the above amount + 50000 for ip usage) divided by tft value almost 0.05 - discount
+        timestamp: 1628082000 + (6*block_number),
+        discount_level,
+        amount_billed
     };
     let mut expected_events: std::vec::Vec<RawEvent<AccountId>> = Vec::new();
     expected_events.push(RawEvent::ContractBilled(contract_bill_event));
 
-    assert_eq!(our_events[2], expected_events[0]);
+    assert_eq!(our_events[index], expected_events[0]);
 }
 
 #[test]
 fn test_name_contract_billing() {
     new_test_ext().execute_with(|| {
         prepare_farm_and_node();
-        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
         run_to_block(1);
-        Timestamp::set_timestamp(1628082000 * 1000);
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.05), 101).unwrap();
 
         assert_ok!(SmartContractModule::create_name_contract(
             Origin::signed(bob()),
             "foobar".as_bytes().to_vec()
         ));
-
-        let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
-        assert_eq!(contract_billing_info.last_updated, 1628082000);
 
         let contract_to_bill = SmartContractModule::contract_to_bill_at_block(11);
         assert_eq!(contract_to_bill, [1]);
@@ -784,7 +785,7 @@ fn test_name_contract_billing() {
 
         let contract_bill_event = types::ContractBill {
             contract_id: 1,
-            timestamp: 1628082000,
+            timestamp: 1628082072,
             discount_level: types::DiscountLevel::None,
             amount_billed: 199987,
         };
@@ -800,6 +801,9 @@ fn prepare_farm_and_node() {
 
     let ip = "10.2.3.3";
     TfgridModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()).unwrap();
+
+    let ip = "10.2.3.3";
+    TfgridModule::create_twin(Origin::signed(charlie()), ip.as_bytes().to_vec()).unwrap();
 
     let farm_name = "test_farm";
     let mut pub_ips = Vec::new();
@@ -883,6 +887,7 @@ fn prepare_farm_and_node() {
 }
 
 fn run_to_block(n: u64) {
+    Timestamp::set_timestamp((1628082000 * 1000) + (6000 * n));
     while System::block_number() < n {
         SmartContractModule::on_finalize(System::block_number());
         System::on_finalize(System::block_number());
