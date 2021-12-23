@@ -38,7 +38,9 @@ pub fn migrate_node_contracts<T: Config>() -> frame_support::weights::Weight {
     frame_support::debug::RuntimeLogger::init();
 
     let version = PalletVersion::get();
-    if version != types::PalletStorageVersion::V2 {
+    frame_support::debug::info!(" >>> Version: {:?}", version);
+
+    if version != types::PalletStorageVersion::V1 {
         frame_support::debug::info!(" >>> Unused migration!");
         return 0
     }
@@ -59,7 +61,7 @@ pub fn migrate_node_contracts<T: Config>() -> frame_support::weights::Weight {
             };
 
             let new_contract = super::types::Contract {
-                version: 3,
+                version: 2,
                 state: new_state,
                 contract_id: ctr.contract_id,
                 twin_id: ctr.twin_id,
@@ -87,8 +89,8 @@ pub fn migrate_node_contracts<T: Config>() -> frame_support::weights::Weight {
         }
     };
 
-    // Update pallet version to V3
-    PalletVersion::put(types::PalletStorageVersion::V3);
+    // Update pallet version to V2
+    PalletVersion::put(types::PalletStorageVersion::V2);
 
     // Return the weight consumed by the migration.
     T::DbWeight::get().reads_writes(read_writes as Weight + 1, read_writes as Weight + 1)

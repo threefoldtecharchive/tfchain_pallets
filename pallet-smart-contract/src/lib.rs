@@ -481,7 +481,7 @@ impl<T: Config> Module<T> {
     }
 
     fn _bill_node_contract(contract: &mut types::Contract) -> DispatchResult {
-        let mut node_contract = Self::get_node_contract(contract)?;
+        let node_contract = Self::get_node_contract(contract)?;
 
         let node = pallet_tfgrid::Nodes::get(node_contract.node_id);
         ensure!(
@@ -556,9 +556,6 @@ impl<T: Config> Module<T> {
         
         // If total balance exceeds the twin's balance, we can decomission contract
         if decomission {
-            if node_contract.public_ips > 0 {
-                let _ = Self::_free_ip(contract.contract_id, &mut node_contract);
-            }
             let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
             return Self::_cancel_contract(twin.account_id, contract.contract_id, types::Cause::OutOfFunds);
         }
