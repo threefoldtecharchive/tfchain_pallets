@@ -84,7 +84,7 @@ impl pallet_balances::Config for TestRuntime {
 impl pallet_tfgrid::Config for TestRuntime {
     type Event = Event;
     type Currency = Balances;
-    type ExternalOrigin = EnsureRoot<Self::AccountId>;
+    type RestrictedOrigin = EnsureRoot<Self::AccountId>;
 }
 
 impl pallet_tft_price::Config for TestRuntime {

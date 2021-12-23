@@ -30,9 +30,9 @@ pub type BalanceOf<T> =
 pub trait Config: system::Config + timestamp::Config {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
     type Currency: Currency<Self::AccountId>;
-    /// Origin for signing important extrinsics
-	/// Can be the root of another origin configured in the runtime
-    type ExternalOrigin: EnsureOrigin<Self::Origin>;
+	/// Origin for restricted extrinsics
+	/// Can be the root or another origin configured in the runtime
+	type RestrictedOrigin: EnsureOrigin<Self::Origin>;
 }
 
 // Version constant that referenced the struct version
@@ -362,7 +362,7 @@ decl_module! {
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn set_farm_certification(origin, farm_id: u32, certification_type: types::CertificationType) -> dispatch::DispatchResult {
-            T::ExternalOrigin::ensure_origin(origin)?;
+            T::RestrictedOrigin::ensure_origin(origin)?;
 
             ensure!(Farms::contains_key(farm_id), Error::<T>::FarmNotExists);
             let mut stored_farm = Farms::get(farm_id);
@@ -852,7 +852,7 @@ decl_module! {
             foundation_account: T::AccountId,
             certified_sales_account: T::AccountId
         ) -> dispatch::DispatchResult {
-            T::ExternalOrigin::ensure_origin(origin)?;
+            T::RestrictedOrigin::ensure_origin(origin)?;
 
             ensure!(!PricingPolicyIdByName::contains_key(&name), Error::<T>::PricingPolicyExists);
 
@@ -896,7 +896,7 @@ decl_module! {
             foundation_account: T::AccountId,
             certified_sales_account: T::AccountId
         ) -> dispatch::DispatchResult {
-            T::ExternalOrigin::ensure_origin(origin)?;
+            T::RestrictedOrigin::ensure_origin(origin)?;
 
             // Ensure pricing policy with same id already exists
             ensure!(PricingPolicies::<T>::contains_key(&id), Error::<T>::PricingPolicyNotExists);
@@ -933,7 +933,7 @@ decl_module! {
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_certification_code(origin, name: Vec<u8>, description: Vec<u8>, certification_code_type: types::CertificationCodeType) -> dispatch::DispatchResult {
-            T::ExternalOrigin::ensure_origin(origin)?;
+            T::RestrictedOrigin::ensure_origin(origin)?;
 
             ensure!(!CertificationCodeIdByName::contains_key(&name), Error::<T>::CertificationCodeExists);
 
@@ -959,7 +959,7 @@ decl_module! {
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_farming_policy(origin, name: Vec<u8>, su: u32, cu: u32, nu: u32, ipv4: u32, certification_type: types::CertificationType) -> dispatch::DispatchResult {
-            T::ExternalOrigin::ensure_origin(origin)?;
+            T::RestrictedOrigin::ensure_origin(origin)?;
 
             let mut id = FarmingPolicyID::get();
             id = id+1;
