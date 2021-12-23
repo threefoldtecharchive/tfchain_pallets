@@ -79,10 +79,14 @@ pub fn migrate_node_contracts<T: Config>() -> frame_support::weights::Weight {
             match contract.contract_type {
                 types::ContractData::NodeContract(node_contract) => {
                     let mut active_node_contracts = ActiveNodeContracts::get(node_contract.node_id);
-                    let index = active_node_contracts.iter().position(|x| x == &ctr_id).unwrap();
-                    active_node_contracts.remove(index);
-                    ActiveNodeContracts::insert(node_contract.node_id, active_node_contracts);
-                    read_writes+=1;
+                    match active_node_contracts.iter().position(|x| x == &ctr_id) {
+                        Some(index) => {
+                            active_node_contracts.remove(index);
+                            ActiveNodeContracts::insert(node_contract.node_id, active_node_contracts);
+                            read_writes+=1;
+                        },
+                        None => {}
+                    };
                 },
                 _ => (),
             }
