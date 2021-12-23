@@ -6,4 +6,6 @@ members = [
     "pallet-vesting-validator",
     "pallet-burning",
     "pallet-kvstore",
+    "pallet-runtime-upgrade",
+    "substrate-validator-set"
 ]

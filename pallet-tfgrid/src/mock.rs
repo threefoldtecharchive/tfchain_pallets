@@ -5,6 +5,7 @@ use sp_runtime::{
     testing::Header,
     traits::{BlakeTwo256, IdentityLookup},
 };
+use frame_system::EnsureRoot;
 
 use sp_core::{ed25519, sr25519, Pair, Public, H256};
 
@@ -71,6 +72,7 @@ impl frame_system::Config for TestRuntime {
 impl Config for TestRuntime {
     type Event = Event;
     type Currency = Balances;
+    type RestrictedOrigin = EnsureRoot<Self::AccountId>;
 }
 
 impl pallet_balances::Config for TestRuntime {
