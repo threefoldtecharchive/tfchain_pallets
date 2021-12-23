@@ -19,8 +19,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod migration;
-
 pub mod types;
 
 pub trait Config: system::Config + pallet_tfgrid::Config + pallet_timestamp::Config {
@@ -99,10 +97,6 @@ decl_storage! {
 decl_module! {
     pub struct Module<T: Config> for enum Call where origin: T::Origin {
         fn deposit_event() = default;
-
-        fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migration::migrate_node_contracts::<T>()
-		}
 
         #[weight = 10]
         fn create_node_contract(origin, node_id: u32, data: Vec<u8>, deployment_hash: Vec<u8>, public_ips: u32){
