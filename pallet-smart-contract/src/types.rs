@@ -23,10 +23,7 @@ pub struct Contract {
 
 impl Contract {
     pub fn is_state_delete(&self) -> bool {
-        match self.state {
-            ContractState::Deleted(_) => true,
-            ContractState::Created => false
-        }
+        matches!(self.state, ContractState::Deleted(_))
     }
 }
 

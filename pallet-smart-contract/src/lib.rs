@@ -392,10 +392,8 @@ impl<T: Config> Module<T> {
             return Ok(());
         }
 
-        println!("contract billing last updated: {:?}, report timestamp: {:?}", contract_billing_info.last_updated, report.timestamp);
         let seconds_elapsed = report.timestamp - contract_billing_info.last_updated;
         debug::info!("seconds elapsed: {:?}", seconds_elapsed);
-        println!("seconds elapsed: {:?}", seconds_elapsed);
 
         let hru = U64F64::from_num(report.hru) / pricing_policy.su.factor();
         let sru = U64F64::from_num(report.sru) / pricing_policy.su.factor();
@@ -456,7 +454,6 @@ impl<T: Config> Module<T> {
             let mut contract = Contracts::get(contract_id);
             let contract_billing_info = ContractBillingInformationByID::get(contract_id);
 
-            println!("contract state: {:?}", contract.state);
             // if the contract is in any other state then created and it has no unbilled amounts left, skip it
             // this contract will be removed from the billing cycle when this function returns
             if contract.state != types::ContractState::Created && contract_billing_info.amount_unbilled == 0 {
@@ -517,7 +514,6 @@ impl<T: Config> Module<T> {
             return Err(DispatchError::from(Error::<T>::TFTPriceValueError));
         }
         let total_cost_tft = U64F64::from_num(total_cost) / tft_price;
-        println!("total tft cost: {:?}", total_cost_tft);
         let total_cost_tft_64 = U64F64::to_num(total_cost_tft);
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
         let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
@@ -539,8 +535,6 @@ impl<T: Config> Module<T> {
             amount_due = balance;
             decomission = true;
         }
-
-        println!("decomission: {:?}, amount due: {:?}, amount due as u128 {:?}, balance: {:?}, discount: {:?}", decomission, amount_due, amount_due_as_u128, balance, discount_received);
 
         // Distribute cultivation rewards
         match Self::_distribute_cultivation_rewards(&contract, &pricing_policy, amount_due) {
