@@ -431,8 +431,8 @@ impl<T: Config> Module<T> {
         let total = su_cost + cu_cost + nu_cost;
         let total = total.ceil().to_num::<u64>();
         debug::info!("total cost: {:?}", total);
-
-        contract_billing_info.previous_nu_reported = used_nru.ceil().to_num::<u64>();
+        
+        contract_billing_info.previous_nu_reported = (U64F64::from_num(report.nru) / pricing_policy.nu.factor()).to_num::<u64>();
         contract_billing_info.amount_unbilled += total;
         contract_billing_info.last_updated = report.timestamp;
 
