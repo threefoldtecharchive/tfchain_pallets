@@ -22,8 +22,6 @@ mod tests;
 #[cfg(test)]
 mod mock;
 
-mod migration;
-
 pub mod types;
 
 pub type BalanceOf<T> =
@@ -266,10 +264,6 @@ decl_module! {
         type Error = Error<T>;
 
         fn deposit_event() = default;
-
-        fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migration::migrate_to_v3::<T>()
-		}
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_farm(origin, name: Vec<u8>, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
