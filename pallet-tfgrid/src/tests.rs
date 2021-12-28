@@ -444,6 +444,24 @@ fn create_node_works() {
 }
 
 #[test]
+fn set_certification_type_node_works() {
+    ExternalityBuilder::build().execute_with(|| {
+        create_entity();
+        create_twin();
+        create_farm();
+        create_node();
+
+        assert_ok!(TfgridModule::set_node_certification(RawOrigin::Root.into(), 1, super::types::CertificationType::Certified));
+        let node = TfgridModule::nodes(1);
+        assert_eq!(node.certification_type, super::types::CertificationType::Certified);
+
+        assert_ok!(TfgridModule::set_node_certification(RawOrigin::Root.into(), 1, super::types::CertificationType::Diy));
+        let node = TfgridModule::nodes(1);
+        assert_eq!(node.certification_type, super::types::CertificationType::Diy);
+    });
+}
+
+#[test]
 fn node_report_uptime_works() {
     ExternalityBuilder::build().execute_with(|| {
         create_entity();

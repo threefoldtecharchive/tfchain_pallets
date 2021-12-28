@@ -6,6 +6,7 @@ use frame_support::traits::Vec;
 pub enum StorageVersion {
     V1Struct,
     V2Struct,
+    V3Struct,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Encode, Decode, Default)]
@@ -57,6 +58,7 @@ pub struct Node {
     pub created: u64,
     pub farming_policy_id: u32,
     pub interfaces: Vec<Interface>,
+    pub certification_type: CertificationType,
 }
 
 pub type IP = Vec<u8>;
