@@ -1048,7 +1048,7 @@ impl<T: Config> Module<T> {
         let farm_twin = Twins::<T>::get(farm.twin_id);
 
         let node_twin_balance: BalanceOf<T> = T::Currency::free_balance(&node_twin.account_id);
-        let minimal_balance = BalanceOf::<T>::saturated_from(200000 as u128);
+        let minimal_balance = BalanceOf::<T>::saturated_from(1000000 as u128);
 
         if node_twin_balance <= minimal_balance {
             let farmer_twin_balance: BalanceOf<T> =
