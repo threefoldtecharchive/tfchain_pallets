@@ -36,7 +36,7 @@ pub fn migrate_to_v3<T: Config>() -> frame_support::weights::Weight {
     frame_support::debug::info!(" >>> Starting migration, pallet version: {:?}", version);
 
     // Storage migrations should use storage versions for safety.
-    if PalletVersion::get() == super::types::StorageVersion::V2Struct {
+    if PalletVersion::get() == super::types::StorageVersion::V1Struct {
         let count = Nodes::iter().count();
         frame_support::debug::info!(" >>> Updating Nodes storage. Migrating {} nodes...", count);
 
@@ -47,7 +47,7 @@ pub fn migrate_to_v3<T: Config>() -> frame_support::weights::Weight {
                 frame_support::debug::info!("     Migrated node for {:?}...", k);
 
                 let new_node = super::types::Node {
-                    version: super::TFGRID_NODE_VERSION,
+                    version: node.version,
                     id: node.id,
                     farm_id: node.farm_id,
                     twin_id: node.twin_id,
@@ -68,7 +68,7 @@ pub fn migrate_to_v3<T: Config>() -> frame_support::weights::Weight {
         );
 
         // Update storage version.
-        PalletVersion::put(super::types::StorageVersion::V3Struct);
+        PalletVersion::put(super::types::StorageVersion::V2Struct);
         frame_support::debug::info!(" <<< Pallet tfgrid storage updated! Migrated {} nodes ✅", migrated_count);
 
         // Return the weight consumed by the migration.

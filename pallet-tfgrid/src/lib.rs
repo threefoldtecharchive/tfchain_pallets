@@ -543,7 +543,8 @@ decl_module! {
 
         #[weight = 10 + T::DbWeight::get().writes(1) + T::DbWeight::get().reads(1)]
         pub fn set_node_certification(origin, node_id: u32, certification_type: types::CertificationType) -> dispatch::DispatchResult {
-            ensure_root(origin)?;
+            T::RestrictedOrigin::ensure_origin(origin)?;
+
             ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
             let mut stored_node = Nodes::get(node_id);
 
