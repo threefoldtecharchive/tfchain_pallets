@@ -662,7 +662,14 @@ impl<T: Config> Module<T> {
         .map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
 
         // Burn 35%, to not have any imbalance in the system, subtract all previously send amounts with the initial
-        let amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
+        let mut amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
+
+        // Check if we can slash for the amount to burn, if not, check the free balance
+        // of the account and slash that amount because we don't want to destroy the account
+        if !<T as Config>::Currency::can_slash(&twin.account_id, amount_to_burn) {
+            amount_to_burn = <T as Config>::Currency::free_balance(&twin.account_id);
+        }
+
         <T as Config>::Currency::slash(&twin.account_id, amount_to_burn);
         Self::deposit_event(RawEvent::TokensBurned(contract.contract_id, amount_to_burn));
 
