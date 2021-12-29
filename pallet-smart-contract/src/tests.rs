@@ -574,7 +574,7 @@ fn test_node_contract_billing() {
 
         push_report(11);
         run_to_block(12);
-        check_report_cost(2, 847965, 12, types::DiscountLevel::Default);
+        check_report_cost(3, 847965, 12, types::DiscountLevel::Default);
 
         // check the contract owners address to see if it got balance credited
         let twin = TfgridModule::twins(2);
@@ -627,23 +627,23 @@ fn test_node_contract_billing_cycles() {
 
         push_report(11);
         run_to_block(12);
-        check_report_cost(2, 24007, 12, types::DiscountLevel::Gold);
+        check_report_cost(3, 24007, 12, types::DiscountLevel::Gold);
 
         push_report(21);
         run_to_block(22);
-        check_report_cost(4, 23999, 22, types::DiscountLevel::Gold);
+        check_report_cost(6, 23999, 22, types::DiscountLevel::Gold);
 
         push_report(31);
         run_to_block(32);
-        check_report_cost(6, 23999, 32, types::DiscountLevel::Gold);
+        check_report_cost(9, 23999, 32, types::DiscountLevel::Gold);
 
         push_report(41);
         run_to_block(42);
-        check_report_cost(8, 23999, 42, types::DiscountLevel::Gold);
+        check_report_cost(12, 23999, 42, types::DiscountLevel::Gold);
 
         push_report(51);
         run_to_block(52);
-        check_report_cost(10, 23999, 52, types::DiscountLevel::Gold);
+        check_report_cost(15, 23999, 52, types::DiscountLevel::Gold);
     });
 }
 
@@ -664,7 +664,7 @@ fn test_node_contract_billing_should_cancel_contract_when_out_of_funds() {
 
         push_report(11);
         run_to_block(12);
-        check_report_cost(2, 60016, 12, types::DiscountLevel::None);
+        check_report_cost(3, 60016, 12, types::DiscountLevel::None);
 
         let twin = TfgridModule::twins(3);
         let b = Balances::free_balance(&twin.account_id);
@@ -675,7 +675,7 @@ fn test_node_contract_billing_should_cancel_contract_when_out_of_funds() {
 
         push_report(21);
         run_to_block(22);
-        check_report_cost(4, 39984, 22, types::DiscountLevel::None);
+        check_report_cost(6, 39984, 22, types::DiscountLevel::None);
 
         let twin = TfgridModule::twins(3);
         let b = Balances::free_balance(&twin.account_id);
@@ -699,10 +699,10 @@ fn test_node_contract_billing_should_cancel_contract_when_out_of_funds() {
         })
         .collect::<Vec<_>>();
         
-        let mut expected_events: std::vec::Vec<RawEvent<AccountId>> = Vec::new();
+        let mut expected_events: std::vec::Vec<RawEvent<AccountId, BalanceOf<TestRuntime>>> = Vec::new();
         expected_events.push(RawEvent::NodeContractCanceled(1, 1, 3));
 
-        assert_eq!(our_events[5], expected_events[0]);
+        assert_eq!(our_events[7], expected_events[0]);
     });
 }
 
@@ -745,7 +745,7 @@ fn check_report_cost(index: usize, amount_billed: u128, block_number: u64, disco
         discount_level,
         amount_billed
     };
-    let mut expected_events: std::vec::Vec<RawEvent<AccountId>> = Vec::new();
+    let mut expected_events: std::vec::Vec<RawEvent<AccountId, BalanceOf<TestRuntime>>> = Vec::new();
     expected_events.push(RawEvent::ContractBilled(contract_bill_event));
 
     assert_eq!(our_events[index], expected_events[0]);
@@ -789,7 +789,7 @@ fn test_name_contract_billing() {
             discount_level: types::DiscountLevel::None,
             amount_billed: 199987,
         };
-        let expected_events: std::vec::Vec<RawEvent<AccountId>> =
+        let expected_events: std::vec::Vec<RawEvent<AccountId, BalanceOf<TestRuntime>>> =
             vec![RawEvent::ContractBilled(contract_bill_event)];
         assert_eq!(our_events[1], expected_events[0]);
     });

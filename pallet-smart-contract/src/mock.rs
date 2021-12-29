@@ -17,6 +17,8 @@ use frame_system::EnsureRoot;
 pub type Signature = MultiSignature;
 
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type BalanceOf<T> =
+    <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
 pub type Moment = u64;
 
 type Extrinsic = TestXt<Call, ()>;

@@ -37,6 +37,7 @@ decl_event!(
     pub enum Event<T>
     where
         AccountId = <T as frame_system::Config>::AccountId,
+        BalanceOf = BalanceOf<T>,
     {
         ContractCreated(types::Contract),
         ContractUpdated(types::Contract),
@@ -47,6 +48,7 @@ decl_event!(
         ContractDeployed(u64, AccountId),
         ConsumptionReportReceived(types::Consumption),
         ContractBilled(types::ContractBill),
+        TokensBurned(u64, BalanceOf),
     }
 );
 
@@ -662,6 +664,7 @@ impl<T: Config> Module<T> {
         // Burn 35%, to not have any imbalance in the system, subtract all previously send amounts with the initial
         let amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
         <T as Config>::Currency::slash(&twin.account_id, amount_to_burn);
+        Self::deposit_event(RawEvent::TokensBurned(contract.contract_id, amount_to_burn));
 
         Ok(())
     }
