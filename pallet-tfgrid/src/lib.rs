@@ -69,6 +69,9 @@ decl_storage! {
         pub FarmingPolicies get(fn farming_policies): Vec<types::FarmingPolicy>;
         pub FarmingPolicyIDsByCertificationType get (fn farming_policies_by_certification_type): map hasher(blake2_128_concat) types::CertificationType => Vec<u32>;
 
+        pub UsersTermsAndConditions get(fn users_terms_and_condition): map hasher(blake2_128_concat) T::AccountId => Vec<types::TermsAndConditions<T::AccountId>>;
+        pub FarmersTermsAndConditions get(fn farmers_terms_and_condition): map hasher(blake2_128_concat) T::AccountId => Vec<types::TermsAndConditions<T::AccountId>>;
+
         // ID maps
         FarmID: u32;
         NodeID: u32;
@@ -256,6 +259,9 @@ decl_error! {
         FarmingPolicyAlreadyExists,
         FarmPayoutAdressAlreadyRegistered,
         FarmerDoesNotHaveEnoughFunds,
+
+        UserDidNotSignTermsAndConditions,
+        FarmerDidNotSignTermsAndConditions,
     }
 }
 
@@ -266,8 +272,50 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn user_accept_tc(origin, document_link: Vec<u8>, document_hash: Vec<u8>) -> dispatch::DispatchResult {
+            let account_id = ensure_signed(origin)?;
+            
+            let timestamp = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+
+            let t_and_c = types::TermsAndConditions {
+                account_id: account_id.clone(),
+                timestamp,
+                document_link,
+                document_hash
+            };
+
+            let mut users_terms_and_condition = UsersTermsAndConditions::<T>::get(account_id.clone());
+            users_terms_and_condition.push(t_and_c);
+            UsersTermsAndConditions::<T>::insert(account_id, users_terms_and_condition);
+
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
+        pub fn farmer_accept_tc(origin, document_link: Vec<u8>, document_hash: Vec<u8>) -> dispatch::DispatchResult {
+            let account_id = ensure_signed(origin)?;
+            
+            let timestamp = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+
+            let t_and_c = types::TermsAndConditions {
+                account_id: account_id.clone(),
+                timestamp,
+                document_link,
+                document_hash
+            };
+
+            let mut users_terms_and_condition = FarmersTermsAndConditions::<T>::get(account_id.clone());
+            users_terms_and_condition.push(t_and_c);
+            FarmersTermsAndConditions::<T>::insert(account_id, users_terms_and_condition);
+
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_farm(origin, name: Vec<u8>, public_ips: Vec<types::PublicIP>) -> dispatch::DispatchResult {
             let address = ensure_signed(origin)?;
+
+            ensure!(FarmersTermsAndConditions::<T>::contains_key(address.clone()), Error::<T>::FarmerDidNotSignTermsAndConditions);
 
             ensure!(!FarmIdByName::contains_key(name.clone()), Error::<T>::FarmExists);
             ensure!(TwinIdByAccountID::<T>::contains_key(&address), Error::<T>::TwinNotExists);
@@ -724,6 +772,8 @@ decl_module! {
         #[weight = 10 + T::DbWeight::get().writes(1)]
         pub fn create_twin(origin, ip: Vec<u8>) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
+
+            ensure!(UsersTermsAndConditions::<T>::contains_key(account_id.clone()), Error::<T>::UserDidNotSignTermsAndConditions);
 
             ensure!(!TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinWithPubkeyExists);
 
