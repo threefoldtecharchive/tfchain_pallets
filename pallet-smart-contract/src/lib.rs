@@ -666,7 +666,7 @@ impl<T: Config> Module<T> {
 
         let existential_deposit_requirement = <T as Config>::Currency::minimum_balance();
         let free_balance = <T as Config>::Currency::free_balance(&twin.account_id);
-        if amount_to_burn >= free_balance + existential_deposit_requirement {
+        if amount_to_burn > free_balance - existential_deposit_requirement {
             amount_to_burn = <T as Config>::Currency::free_balance(&twin.account_id) - existential_deposit_requirement;
         }
 
