@@ -662,10 +662,16 @@ impl<T: Config> Module<T> {
         .map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
 
         // Burn 35%, to not have any imbalance in the system, subtract all previously send amounts with the initial
-        let amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
+        let mut amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
+
+        let existential_deposit_requirement = <T as Config>::Currency::minimum_balance();
+        let free_balance = <T as Config>::Currency::free_balance(&twin.account_id);
+        if amount_to_burn > free_balance - existential_deposit_requirement {
+            amount_to_burn = <T as Config>::Currency::free_balance(&twin.account_id) - existential_deposit_requirement;
+        }
+
         <T as Config>::Currency::slash(&twin.account_id, amount_to_burn);
         Self::deposit_event(RawEvent::TokensBurned(contract.contract_id, amount_to_burn));
-
         Ok(())
     }
 
