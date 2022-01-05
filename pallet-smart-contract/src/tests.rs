@@ -679,7 +679,7 @@ fn test_node_contract_billing_should_cancel_contract_when_out_of_funds() {
 
         let twin = TfgridModule::twins(3);
         let b = Balances::free_balance(&twin.account_id);
-        assert_eq!(b, 0);
+        assert_eq!(b, 1);
 
         let c1 = SmartContractModule::contracts(1);
         assert_eq!(c1.state, types::ContractState::Deleted(types::Cause::OutOfFunds));

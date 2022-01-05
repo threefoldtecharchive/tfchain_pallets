@@ -2,7 +2,7 @@
 
 use frame_support::{
     debug, decl_error, decl_event, decl_module, decl_storage, ensure,
-    traits::{Currency, ExistenceRequirement::KeepAlive, Vec, Get, WithdrawReasons, ExistenceRequirement},
+    traits::{Currency, ExistenceRequirement::KeepAlive, Vec, Get},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult, Perbill};
