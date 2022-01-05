@@ -2,7 +2,7 @@
 
 use frame_support::{
     debug, decl_error, decl_event, decl_module, decl_storage, ensure,
-    traits::{Currency, ExistenceRequirement::KeepAlive, Vec, Get},
+    traits::{Currency, ExistenceRequirement::KeepAlive, Vec, Get, WithdrawReasons, ExistenceRequirement},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::SaturatedConversion, DispatchError, DispatchResult, Perbill};
@@ -664,15 +664,14 @@ impl<T: Config> Module<T> {
         // Burn 35%, to not have any imbalance in the system, subtract all previously send amounts with the initial
         let mut amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
 
-        // Check if we can slash for the amount to burn, if not, check the free balance
-        // of the account and slash that amount because we don't want to destroy the account
-        if !<T as Config>::Currency::can_slash(&twin.account_id, amount_to_burn) {
-            amount_to_burn = <T as Config>::Currency::free_balance(&twin.account_id);
+        let existential_deposit_requirement = <T as Config>::Currency::minimum_balance();
+        let free_balance = <T as Config>::Currency::free_balance(&twin.account_id);
+        if amount_to_burn >= free_balance + existential_deposit_requirement {
+            amount_to_burn = <T as Config>::Currency::free_balance(&twin.account_id) - existential_deposit_requirement;
         }
 
         <T as Config>::Currency::slash(&twin.account_id, amount_to_burn);
         Self::deposit_event(RawEvent::TokensBurned(contract.contract_id, amount_to_burn));
-
         Ok(())
     }
 
