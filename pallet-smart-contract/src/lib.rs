@@ -498,10 +498,14 @@ impl<T: Config> Module<T> {
 
         let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(farm.pricing_policy_id);
 
-        let contract_last_billed_at = ContractLastBilledAt::get(contract.contract_id);
         let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+        let mut seconds_elapsed = T::BillingFrequency::get() * 6;
 
-        let seconds_elapsed = now - contract_last_billed_at;
+        if ContractLastBilledAt::contains_key(contract.contract_id) {
+            let contract_last_billed_at = ContractLastBilledAt::get(contract.contract_id);
+            seconds_elapsed = now - contract_last_billed_at;
+        }
+
         // bill user for 1 hour ip usage (60 blocks * 60 seconds)
         let total_ip_cost =  U64F64::from_num(node_contract.public_ips) 
             * (U64F64::from_num(pricing_policy.ipu.value) / 3600)
