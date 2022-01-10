@@ -856,13 +856,31 @@ fn test_name_contract_billing() {
 }
 
 fn prepare_farm_and_node() {
+    let document = "some_link".as_bytes().to_vec();
+    let hash = "some_hash".as_bytes().to_vec();
+
+    assert_ok!(TfgridModule::user_accept_tc(
+        Origin::signed(alice()),
+        document.clone(),
+        hash.clone(),
+    ));
     let ip = "10.2.3.3";
     TfgridModule::create_twin(Origin::signed(alice()), ip.as_bytes().to_vec()).unwrap();
 
     let ip = "10.2.3.3";
+    assert_ok!(TfgridModule::user_accept_tc(
+        Origin::signed(bob()),
+        document.clone(),
+        hash.clone(),
+    ));
     TfgridModule::create_twin(Origin::signed(bob()), ip.as_bytes().to_vec()).unwrap();
 
     let ip = "10.2.3.3";
+    assert_ok!(TfgridModule::user_accept_tc(
+        Origin::signed(charlie()),
+        document,
+        hash,
+    ));
     TfgridModule::create_twin(Origin::signed(charlie()), ip.as_bytes().to_vec()).unwrap();
 
     let farm_name = "test_farm";
@@ -912,6 +930,14 @@ fn prepare_farm_and_node() {
     )
     .unwrap();
 
+    let document = "some_link".as_bytes().to_vec();
+    let hash = "some_hash".as_bytes().to_vec();
+
+    assert_ok!(TfgridModule::farmer_accept_tc(
+        Origin::signed(alice()),
+        document,
+        hash,
+    ));
     TfgridModule::create_farm(
         Origin::signed(alice()),
         farm_name.as_bytes().to_vec(),

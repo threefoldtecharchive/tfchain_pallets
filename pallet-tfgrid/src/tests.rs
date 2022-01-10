@@ -119,6 +119,15 @@ fn test_delete_entity_fails_if_signed_by_someone_else() {
 #[test]
 fn test_create_twin_works() {
     ExternalityBuilder::build().execute_with(|| {
+        let document = "some_link".as_bytes().to_vec();
+        let hash = "some_hash".as_bytes().to_vec();
+    
+        assert_ok!(TfgridModule::user_accept_tc(
+            Origin::signed(test_ed25519()),
+            document,
+            hash,
+        ));
+
         let ip = "10.2.3.3";
         assert_ok!(TfgridModule::create_twin(
             Origin::signed(test_ed25519()),
@@ -130,6 +139,15 @@ fn test_create_twin_works() {
 #[test]
 fn test_delete_twin_works() {
     ExternalityBuilder::build().execute_with(|| {
+        let document = "some_link".as_bytes().to_vec();
+        let hash = "some_hash".as_bytes().to_vec();
+    
+        assert_ok!(TfgridModule::user_accept_tc(
+            Origin::signed(alice()),
+            document,
+            hash,
+        ));
+
         let ip = "10.2.3.3";
         assert_ok!(TfgridModule::create_twin(
             Origin::signed(alice()),
@@ -277,6 +295,15 @@ fn test_create_farm_with_double_ip_fails() {
             contract_id: 0,
         });
 
+        let document = "some_link".as_bytes().to_vec();
+        let hash = "some_hash".as_bytes().to_vec();
+    
+        assert_ok!(TfgridModule::farmer_accept_tc(
+            Origin::signed(alice()),
+            document,
+            hash,
+        ));
+
         assert_noop!(
             TfgridModule::create_farm(Origin::signed(alice()), farm_name, pub_ips),
             Error::<TestRuntime>::IpExists
@@ -403,6 +430,15 @@ fn test_update_twin_works() {
 #[test]
 fn test_update_twin_fails_if_signed_by_someone_else() {
     ExternalityBuilder::build().execute_with(|| {
+        let document = "some_link".as_bytes().to_vec();
+        let hash = "some_hash".as_bytes().to_vec();
+    
+        assert_ok!(TfgridModule::user_accept_tc(
+            Origin::signed(alice()),
+            document,
+            hash,
+        ));
+
         let mut ip = "some_ip".as_bytes().to_vec();
         assert_ok!(TfgridModule::create_twin(Origin::signed(alice()), ip));
 
@@ -865,6 +901,15 @@ fn create_entity() {
 }
 
 fn create_twin() {
+    let document = "some_link".as_bytes().to_vec();
+    let hash = "some_hash".as_bytes().to_vec();
+
+    assert_ok!(TfgridModule::user_accept_tc(
+        Origin::signed(alice()),
+        document,
+        hash,
+    ));
+
     let ip = "10.2.3.3";
     assert_ok!(TfgridModule::create_twin(
         Origin::signed(alice()),
@@ -873,6 +918,15 @@ fn create_twin() {
 }
 
 fn create_twin_bob() {
+    let document = "some_link".as_bytes().to_vec();
+    let hash = "some_hash".as_bytes().to_vec();
+
+    assert_ok!(TfgridModule::user_accept_tc(
+        Origin::signed(bob()),
+        document,
+        hash,
+    ));
+
     let ip = "10.2.3.3";
     assert_ok!(TfgridModule::create_twin(
         Origin::signed(bob()),
@@ -881,6 +935,15 @@ fn create_twin_bob() {
 }
 
 fn create_farm() {
+    let document = "some_link".as_bytes().to_vec();
+    let hash = "some_hash".as_bytes().to_vec();
+
+    assert_ok!(TfgridModule::farmer_accept_tc(
+        Origin::signed(alice()),
+        document,
+        hash,
+    ));
+
     let farm_name = "test_farm".as_bytes().to_vec();
     let mut pub_ips = Vec::new();
     pub_ips.push(super::types::PublicIP {

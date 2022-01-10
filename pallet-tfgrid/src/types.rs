@@ -225,3 +225,11 @@ pub struct FarmingPolicy {
     pub timestamp: u64,
     pub certification_type: CertificationType,
 }
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Debug)]
+pub struct TermsAndConditions<AccountId> {
+    pub account_id: AccountId,
+    pub timestamp: u64,
+    pub document_link: Vec<u8>,
+    pub document_hash: Vec<u8>
+}
