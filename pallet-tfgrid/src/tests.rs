@@ -142,6 +142,32 @@ fn test_delete_twin_works() {
 }
 
 #[test]
+fn test_delete_node_works() {
+    ExternalityBuilder::build().execute_with(|| {
+        create_twin();
+        create_farm();
+        create_node();
+
+        assert_ok!(TfgridModule::delete_node_farm(Origin::signed(alice()), 1, 1));
+    });
+}
+
+#[test]
+fn test_delete_node_fails_if_not_authorized() {
+    ExternalityBuilder::build().execute_with(|| {
+        create_twin();
+        create_twin_bob();
+        create_farm();
+        create_node();
+
+        assert_noop!(
+            TfgridModule::delete_node_farm(Origin::signed(bob()), 1, 1),
+            Error::<TestRuntime>::FarmerNotAuthorized
+        );
+    });
+}
+
+#[test]
 fn test_add_entity_to_twin() {
     ExternalityBuilder::build().execute_with(|| {
         create_entity();
