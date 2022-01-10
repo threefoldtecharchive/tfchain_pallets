@@ -148,7 +148,7 @@ fn test_delete_node_works() {
         create_farm();
         create_node();
 
-        assert_ok!(TfgridModule::delete_node_farm(Origin::signed(alice()), 1, 1));
+        assert_ok!(TfgridModule::delete_node_farm(Origin::signed(alice()), 1));
     });
 }
 
@@ -161,7 +161,7 @@ fn test_delete_node_fails_if_not_authorized() {
         create_node();
 
         assert_noop!(
-            TfgridModule::delete_node_farm(Origin::signed(bob()), 1, 1),
+            TfgridModule::delete_node_farm(Origin::signed(bob()), 1),
             Error::<TestRuntime>::FarmerNotAuthorized
         );
     });

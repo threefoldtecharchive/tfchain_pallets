@@ -536,22 +536,21 @@ decl_module! {
             Ok(())
         }
 
-        #[weight = 10 + T::DbWeight::get().writes(1)]
-        pub fn delete_node_farm(origin, farm_id: u32, node_id: u32) -> dispatch::DispatchResult {
+        #[weight = 10 + T::DbWeight::get().writes(1) + T::DbWeight::get().reads(4)]
+        pub fn delete_node_farm(origin, node_id: u32) -> dispatch::DispatchResult {
             let account_id = ensure_signed(origin)?;
 
             ensure!(TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
-            ensure!(Farms::contains_key(&farm_id), Error::<T>::FarmNotExists);
             ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
 
             // check if the farmer twin is authorized
             let farm_twin_id = TwinIdByAccountID::<T>::get(&account_id);
-            let farm = Farms::get(farm_id);
-            ensure!(farm_twin_id == farm.twin_id, Error::<T>::FarmerNotAuthorized);
-
-            // check if the node belong to said farm
+            // check if the ndode belong to said farm
             let node = Nodes::get(&node_id);
-            ensure!(node.farm_id == farm_id, Error::<T>::FarmerNotAuthorized);
+            let farm = Farms::get(node.farm_id);
+            let farm_twin = Twins::<T>::get(farm.twin_id);
+            ensure!(farm_twin_id == farm_twin.id, Error::<T>::FarmerNotAuthorized);
+
 
             Nodes::remove(node_id);
 
