@@ -80,6 +80,8 @@ decl_storage! {
     trait Store for Module<T: Config> as SmartContractModule {
         pub Contracts get(fn contracts): map hasher(blake2_128_concat) u64 => types::Contract;
         pub ContractBillingInformationByID get(fn contract_billing_information_by_id): map hasher(blake2_128_concat) u64 => types::ContractBillingInformation;
+        pub ContractLastBilledAt get(fn contract_billed_at): map hasher(blake2_128_concat) u64 => u64;
+
         // ContractIDByNodeIDAndHash is a mapping for a contract ID by supplying a node_id and a deployment_hash
         // this combination makes a deployment for a user / node unique
         pub ContractIDByNodeIDAndHash get(fn node_contract_by_hash): double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) Vec<u8> => u64;
@@ -222,8 +224,9 @@ impl<T: Config> Module<T> {
             contract_type,
         };
 
+        let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
         let contract_billing_information = types::ContractBillingInformation {
-            last_updated: <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000,
+            last_updated: now,
             amount_unbilled: 0,
             previous_nu_reported: 0,
         };
@@ -235,6 +238,8 @@ impl<T: Config> Module<T> {
         Contracts::insert(id, &contract);
         ContractID::put(id);
         ContractBillingInformationByID::insert(id, contract_billing_information);
+        ContractLastBilledAt::insert(id, now);
+
         Ok(contract)
     }
 
@@ -493,24 +498,38 @@ impl<T: Config> Module<T> {
 
         let pricing_policy = pallet_tfgrid::PricingPolicies::<T>::get(farm.pricing_policy_id);
 
+        let now = <timestamp::Module<T>>::get().saturated_into::<u64>() / 1000;
+        let mut seconds_elapsed = T::BillingFrequency::get() * 6;
+
+        if ContractLastBilledAt::contains_key(contract.contract_id) {
+            let contract_last_billed_at = ContractLastBilledAt::get(contract.contract_id);
+            seconds_elapsed = now - contract_last_billed_at;
+        }
+
         // bill user for 1 hour ip usage (60 blocks * 60 seconds)
-        let total_ip_cost = node_contract.public_ips * pricing_policy.ipu.value;
+        let total_ip_cost =  U64F64::from_num(node_contract.public_ips) 
+            * (U64F64::from_num(pricing_policy.ipu.value) / 3600)
+            * U64F64::from_num(seconds_elapsed);
 
         let mut contract_billing_info = ContractBillingInformationByID::get(contract.contract_id);
-        let total_cost = total_ip_cost as u64 + contract_billing_info.amount_unbilled;
+        let total_cost = total_ip_cost.to_num::<u64>() + contract_billing_info.amount_unbilled;
 
         // If cost is 0, reinsert to be billed at next interval
         if total_cost == 0 {
             return Ok(());
         }
 
-        let tft_price = U64F64::from_num(pallet_tft_price::AverageTftPrice::get());
-        if tft_price <= U64F64::from_num(0) {
+        let tft_price_musd = U64F64::from_num(pallet_tft_price::AverageTftPrice::get()) * 1000;
+        if tft_price_musd <= U64F64::from_num(0) {
             debug::info!("TFT price is zero");
             return Err(DispatchError::from(Error::<T>::TFTPriceValueError));
         }
-        let total_cost_tft = U64F64::from_num(total_cost) / tft_price;
+
+        let total_cost_musd = U64F64::from_num(total_cost)/10000;
+
+        let total_cost_tft = (total_cost_musd / tft_price_musd) * U64F64::from_num(1e7);
         let total_cost_tft_64 = U64F64::to_num(total_cost_tft);
+
         let twin = pallet_tfgrid::Twins::<T>::get(contract.twin_id);
         let balance: BalanceOf<T> = <T as Config>::Currency::free_balance(&twin.account_id);
 
@@ -549,6 +568,7 @@ impl<T: Config> Module<T> {
         // set the amount unbilled back to 0
         contract_billing_info.amount_unbilled = 0;
         ContractBillingInformationByID::insert(contract.contract_id, &contract_billing_info);
+        ContractLastBilledAt::insert(contract.contract_id, now);
         
         // If total balance exceeds the twin's balance, we can decomission contract
         if decomission {
@@ -662,10 +682,16 @@ impl<T: Config> Module<T> {
         .map_err(|_| DispatchError::Other("Can't make sales share transfer"))?;
 
         // Burn 35%, to not have any imbalance in the system, subtract all previously send amounts with the initial
-        let amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
+        let mut amount_to_burn = amount - foundation_share - staking_pool_share - sales_share;
+
+        let existential_deposit_requirement = <T as Config>::Currency::minimum_balance();
+        let free_balance = <T as Config>::Currency::free_balance(&twin.account_id);
+        if amount_to_burn > free_balance - existential_deposit_requirement {
+            amount_to_burn = <T as Config>::Currency::free_balance(&twin.account_id) - existential_deposit_requirement;
+        }
+
         <T as Config>::Currency::slash(&twin.account_id, amount_to_burn);
         Self::deposit_event(RawEvent::TokensBurned(contract.contract_id, amount_to_burn));
-
         Ok(())
     }
 

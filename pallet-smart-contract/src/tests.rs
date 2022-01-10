@@ -574,35 +574,35 @@ fn test_node_contract_billing() {
 
         push_report(11);
         run_to_block(12);
-        check_report_cost(3, 847965, 12, types::DiscountLevel::Default);
+        check_report_cost(3, 36070, 12, types::DiscountLevel::Gold);
 
         // check the contract owners address to see if it got balance credited
         let twin = TfgridModule::twins(2);
         let b = Balances::free_balance(&twin.account_id);
         let balances_as_u128: u128 = b.saturated_into::<u128>();
 
-        let twin2_balance_should_be = 2500000000 - 847965 as u128;
+        let twin2_balance_should_be = 2500000000 - 36070 as u128;
         assert_eq!(balances_as_u128, twin2_balance_should_be);
         
         let staking_pool_account_balance = Balances::free_balance(&get_staking_pool_account());
         let staking_pool_account_balance_as_u128: u128 = staking_pool_account_balance.saturated_into::<u128>();
         // equal to 5%
-        assert_eq!(staking_pool_account_balance_as_u128, 42398);
+        assert_eq!(staking_pool_account_balance_as_u128, 1803);
 
         let pricing_policy = TfgridModule::pricing_policies(1);
         let foundation_account_balance = Balances::free_balance(&pricing_policy.foundation_account);
         let foundation_account_balance_as_u128: u128 = foundation_account_balance.saturated_into::<u128>();
         // equal to 10%
-        assert_eq!(foundation_account_balance_as_u128, 84796);
+        assert_eq!(foundation_account_balance_as_u128, 3607);
 
         let sales_account_balance = Balances::free_balance(&pricing_policy.certified_sales_account);
         let sales_account_balance_as_u128: u128 = sales_account_balance.saturated_into::<u128>();
         // equal to 50%
-        assert_eq!(sales_account_balance_as_u128, 423982);
+        assert_eq!(sales_account_balance_as_u128, 18035);
 
         let total_issuance = Balances::total_issuance();
         // total issueance is now previous total - amount burned from contract billed (35%)
-        assert_eq!(total_issuance, initial_total_issuance - 296789);
+        assert_eq!(total_issuance, initial_total_issuance - 12625);
 
         // amount unbilled should have been reset after a transfer between contract owner and farmer
         let contract_billing_info = SmartContractModule::contract_billing_information_by_id(1);
@@ -627,23 +627,23 @@ fn test_node_contract_billing_cycles() {
 
         push_report(11);
         run_to_block(12);
-        check_report_cost(3, 24007, 12, types::DiscountLevel::Gold);
+        check_report_cost(3, 25895, 12, types::DiscountLevel::Gold);
 
         push_report(21);
         run_to_block(22);
-        check_report_cost(6, 23999, 22, types::DiscountLevel::Gold);
+        check_report_cost(6, 25559, 22, types::DiscountLevel::Gold);
 
         push_report(31);
         run_to_block(32);
-        check_report_cost(9, 23999, 32, types::DiscountLevel::Gold);
+        check_report_cost(9, 25559, 32, types::DiscountLevel::Gold);
 
         push_report(41);
         run_to_block(42);
-        check_report_cost(12, 23999, 42, types::DiscountLevel::Gold);
+        check_report_cost(12, 25559, 42, types::DiscountLevel::Gold);
 
         push_report(51);
         run_to_block(52);
-        check_report_cost(15, 23999, 52, types::DiscountLevel::Gold);
+        check_report_cost(15, 25559, 52, types::DiscountLevel::Gold);
     });
 }
 
@@ -664,22 +664,22 @@ fn test_node_contract_billing_should_cancel_contract_when_out_of_funds() {
 
         push_report(11);
         run_to_block(12);
-        check_report_cost(3, 60016, 12, types::DiscountLevel::None);
+        check_report_cost(3, 64736, 12, types::DiscountLevel::None);
 
         let twin = TfgridModule::twins(3);
         let b = Balances::free_balance(&twin.account_id);
         let balances_as_u128: u128 = b.saturated_into::<u128>();
 
-        let twin2_balance_should_be = 100000 - 60016 as u128;
+        let twin2_balance_should_be = 100000 - 64736 as u128;
         assert_eq!(balances_as_u128, twin2_balance_should_be);
 
         push_report(21);
         run_to_block(22);
-        check_report_cost(6, 39984, 22, types::DiscountLevel::None);
+        check_report_cost(6, 35264, 22, types::DiscountLevel::None);
 
         let twin = TfgridModule::twins(3);
         let b = Balances::free_balance(&twin.account_id);
-        assert_eq!(b, 0);
+        assert_eq!(b, 1);
 
         let c1 = SmartContractModule::contracts(1);
         assert_eq!(c1.state, types::ContractState::Deleted(types::Cause::OutOfFunds));
@@ -704,6 +704,66 @@ fn test_node_contract_billing_should_cancel_contract_when_out_of_funds() {
 
         assert_eq!(our_events[7], expected_events[0]);
     });
+}
+
+#[test]
+fn test_new_contract_bill() {
+    new_test_ext().execute_with(|| {
+        prepare_farm_and_node();
+        run_to_block(1);
+        TFTPriceModule::set_prices(Origin::signed(bob()), U16F16::from_num(0.062), 101).unwrap();
+
+        assert_ok!(SmartContractModule::create_node_contract(
+            Origin::signed(alice()),
+            1,
+            "some_data".as_bytes().to_vec(),
+            "hash".as_bytes().to_vec(),
+            1
+        ));
+
+        let gigabyte = 1000 * 1000 * 1000;
+        let mut consumption_reports = Vec::new();
+        consumption_reports.push(super::types::Consumption {
+            contract_id: 1,
+            cru: 2,
+            hru: 0,
+            mru: 8 * gigabyte,
+            sru: 25 * gigabyte,
+            nru: 0,
+            timestamp: 1628082000 + (11*6),
+        });
+    
+        assert_ok!(SmartContractModule::add_reports(
+            Origin::signed(alice()),
+            consumption_reports
+        ));
+
+        run_to_block(12);
+
+        // Test that the expected events were emitted
+        let our_events = System::events()
+        .into_iter()
+        .map(|r| r.event)
+        .filter_map(|e| {
+            if let Event::pallet_smart_contract(inner) = e {
+                Some(inner)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+        let contract_bill_event = types::ContractBill {
+            contract_id: 1,
+            timestamp: 1628082072,
+            discount_level: types::DiscountLevel::Gold,
+            amount_billed: 42816
+        };
+        let mut expected_events: std::vec::Vec<RawEvent<AccountId, BalanceOf<TestRuntime>>> = Vec::new();
+        expected_events.push(RawEvent::ContractBilled(contract_bill_event));
+
+        assert_eq!(our_events[3], expected_events[0]);
+    })
 }
 
 fn push_report(block_number: u64) {
@@ -787,7 +847,7 @@ fn test_name_contract_billing() {
             contract_id: 1,
             timestamp: 1628082072,
             discount_level: types::DiscountLevel::None,
-            amount_billed: 199987,
+            amount_billed: 277983,
         };
         let expected_events: std::vec::Vec<RawEvent<AccountId, BalanceOf<TestRuntime>>> =
             vec![RawEvent::ContractBilled(contract_bill_event)];
@@ -814,27 +874,27 @@ fn prepare_farm_and_node() {
     });
 
     let su_policy = pallet_tfgrid_types::Policy {
-        value: 150000,
+        value: 194400,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
     let nu_policy = pallet_tfgrid_types::Policy {
-        value: 1000,
-        unit: pallet_tfgrid_types::Unit::Gigabytes,
-    };
-    let cu_policy = pallet_tfgrid_types::Policy {
-        value: 300000,
-        unit: pallet_tfgrid_types::Unit::Gigabytes,
-    };
-    let ipu_policy = pallet_tfgrid_types::Policy {
         value: 50000,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
+    let cu_policy = pallet_tfgrid_types::Policy {
+        value: 305600,
+        unit: pallet_tfgrid_types::Unit::Gigabytes,
+    };
+    let ipu_policy = pallet_tfgrid_types::Policy {
+        value: 69400,
+        unit: pallet_tfgrid_types::Unit::Gigabytes,
+    };
     let unique_name_policy = pallet_tfgrid_types::Policy {
-        value: 10000,
+        value: 13900,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
     let domain_name_policy = pallet_tfgrid_types::Policy {
-        value: 20000,
+        value: 27800,
         unit: pallet_tfgrid_types::Unit::Gigabytes,
     };
 
