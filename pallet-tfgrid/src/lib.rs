@@ -256,6 +256,7 @@ decl_error! {
         FarmingPolicyAlreadyExists,
         FarmPayoutAdressAlreadyRegistered,
         FarmerDoesNotHaveEnoughFunds,
+        FarmerNotAuthorized,
     }
 }
 
@@ -531,6 +532,27 @@ decl_module! {
 
             // refund node wallet if needed
             Self::fund_node_wallet(node_id);
+
+            Ok(())
+        }
+
+        #[weight = 10 + T::DbWeight::get().writes(1) + T::DbWeight::get().reads(4)]
+        pub fn delete_node_farm(origin, node_id: u32) -> dispatch::DispatchResult {
+            let account_id = ensure_signed(origin)?;
+
+            ensure!(TwinIdByAccountID::<T>::contains_key(&account_id), Error::<T>::TwinNotExists);
+            ensure!(Nodes::contains_key(&node_id), Error::<T>::NodeNotExists);
+
+            // check if the farmer twin is authorized
+            let farm_twin_id = TwinIdByAccountID::<T>::get(&account_id);
+            // check if the ndode belong to said farm
+            let node = Nodes::get(&node_id);
+            let farm = Farms::get(node.farm_id);
+            let farm_twin = Twins::<T>::get(farm.twin_id);
+            ensure!(farm_twin_id == farm_twin.id, Error::<T>::FarmerNotAuthorized);
+
+
+            Nodes::remove(node_id);
 
             Ok(())
         }
